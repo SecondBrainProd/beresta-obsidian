@@ -1,0 +1,15 @@
+{
+  // Правила для тестов и сборщика — отдельные от правил плагина.
+  //
+  // Разделение проводит границу там, где она проходит на самом деле: у тестов
+  // и у `esbuild.config.mjs` есть Node — они читают файлы и зовут сборщик; у
+  // плагина Node нет и быть не может. Один общий `tsconfig` с `types: ["node"]`
+  // стёр бы эту границу и разрешил бы `require("fs")` внутри `src/`.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "allowJs": true,
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "esbuild.config.mjs"]
+}

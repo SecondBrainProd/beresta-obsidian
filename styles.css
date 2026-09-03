@@ -1,0 +1,277 @@
+/*
+ * Оформление плагина Beresta.
+ *
+ * Третий файл релиза (после `main.js` и `manifest.json`) — Obsidian
+ * подключает его сам, когда плагин включён.
+ *
+ * Цвета и отступы берутся переменными темы (`--text-muted`, `--size-4-2` и
+ * прочие), своей палитры плагин не заводит: иначе он будет выглядеть чужим в
+ * каждой теме, кроме одной. Правил здесь ровно столько, сколько нужно трём
+ * экранам задачи 14 — окну привязки, окну версий и панели расхождений; всё
+ * остальное рисует сам Obsidian.
+ */
+
+.beresta-binding-intro p {
+  margin: 0 0 var(--size-4-2) 0;
+}
+
+/* Список книг прокручивается внутри себя, а не вместе с окном. Иначе нижняя
+   полоса с кнопкой уезжает за десять книг вниз (замерено: отметка 1447 px при
+   высоте окна 800) — человек до неё не доходит и не знает, что она есть. */
+.beresta-binding-list {
+  max-height: min(52vh, 460px);
+  overflow-y: auto;
+  padding-right: var(--size-4-2);
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.beresta-binding-book {
+  padding: var(--size-4-3) 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.beresta-binding-list > .beresta-binding-book:last-child {
+  border-bottom: none;
+}
+
+/* Длинное название книги переносится, а не обрезается: обрезанное название
+   владелец не отличит от соседнего издания. */
+/* Заголовок карточки книги. Был `h4`; с 20260828 это `div` — правило каталога
+   Obsidian просит не ставить заголовочные теги, а `setHeading` привёл бы внутрь
+   карточки чужую строку настроек с рамкой и отступами. Вес и кегль, которые
+   раньше давал сам тег, заданы здесь. */
+.beresta-binding-title {
+  margin: 0 0 var(--size-2-1) 0;
+  overflow-wrap: anywhere;
+  font-weight: var(--font-semibold);
+  font-size: var(--font-ui-medium);
+}
+
+.beresta-binding-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-2);
+  margin-top: var(--size-4-2);
+}
+
+/* Кнопка выбора: путь заметки и под ним — почему она в списке.
+ *
+ * `height: auto` здесь не косметика. Obsidian задаёт кнопке высоту в 30 px, а
+ * путь заметки в три строки занимает 39 — третья строка висела ПОД кнопкой, на
+ * фоне окна, и налезала на соседнюю кнопку. Отсюда же `white-space: normal` и
+ * `overflow-wrap: anywhere`: перенос по любому месту, иначе длинный путь без
+ * пробелов уезжает за край. */
+.beresta-binding-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--size-4-2);
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  padding: var(--size-4-2) var(--size-4-3);
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.3;
+}
+
+.beresta-binding-book > .beresta-binding-option {
+  margin-top: var(--size-4-2);
+}
+
+/* Выбранное видно на самой кнопке. Раньше выбор менял только серую строчку
+   мелким кеглем над кнопками — на десяти книгах с прокруткой понять, что уже
+   выбрано, было нельзя. */
+.beresta-binding-option.is-chosen {
+  box-shadow: inset 0 0 0 2px var(--interactive-accent);
+}
+
+.beresta-binding-mark {
+  flex: 0 0 auto;
+  visibility: hidden;
+  color: var(--text-accent);
+}
+
+.beresta-binding-option.is-chosen .beresta-binding-mark {
+  visibility: visible;
+}
+
+.beresta-binding-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.beresta-binding-why {
+  margin-top: var(--size-2-1);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.beresta-binding-more {
+  height: auto;
+  margin-top: var(--size-4-2);
+  padding: var(--size-4-1) var(--size-4-2);
+  font-size: var(--font-ui-smaller);
+  white-space: normal;
+  text-align: left;
+}
+
+/* «Пропустить» всегда на своей строке и всегда одной ширины: раньше кнопки шли
+   потоком, и место «Пропустить» зависело от длины соседнего пути — у одной
+   книги она стояла отдельной строкой, у другой сбоку. */
+.beresta-binding-skip {
+  margin-top: var(--size-4-2);
+}
+
+.beresta-binding-skip .beresta-binding-option {
+  width: auto;
+}
+
+.beresta-binding-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-4-3);
+  margin-top: var(--size-4-3);
+  padding-top: var(--size-4-3);
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.beresta-binding-footer-buttons {
+  display: flex;
+  gap: var(--size-4-2);
+}
+
+.beresta-muted {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.beresta-conflicts {
+  padding: var(--size-4-3);
+  user-select: text;
+}
+
+.beresta-conflicts div {
+  margin-bottom: var(--size-2-2);
+}
+
+/* Ответ на «Привязать выбранные»: путь заметки в уведомлении — ссылка.
+   Нажатие открывает заметку, и это единственная дорога к результату сразу
+   после привязки: строка состояния говорит про снимок выгрузки и после
+   привязки не меняется. */
+.beresta-notice-note {
+  margin-top: var(--size-2-2);
+}
+
+.beresta-notice-link {
+  /* Цвет — тот же, что у остального текста уведомления: своя краска здесь
+     разъедется с темой, а подчёркивания хватает, чтобы прочитать ссылку. */
+  color: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+
+.beresta-notice-rest {
+  margin-top: var(--size-2-3);
+}
+
+/* Ответ поля настроек человеку — под самим полем, а не всплывашкой.
+
+   Находка 7 прогона глазами 20260818: в «Часовой пояс выписок» вписывалось
+   слово, поле показывало слово, в `data.json` оставалось прежнее число, и
+   узнать об этом было нельзя. Сообщение живёт РЯДОМ С ПОЛЕМ и не исчезает
+   само: уведомление в углу человек, печатающий в поле, не смотрит. */
+.beresta-setting-said {
+  margin-top: var(--size-2-2);
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
+
+/* Отказ — краской темы, а не своей: `--text-error` перекрашивается вместе с
+   темой человека, любой свой красный однажды сольётся с фоном. */
+.beresta-setting-said.is-refused {
+  color: var(--text-error);
+}
+
+/* Рамка — на самом поле, а не на строке настройки: у строки своя нижняя
+   граница-разделитель, и перекрасить её значило бы подчеркнуть красным соседа. */
+input.beresta-setting-invalid {
+  border-color: var(--text-error);
+}
+
+/* Цвет разметки — цветом, а не словом (находка 10 прогона глазами 20260818).
+ *
+ * Отрисовка ставит метку коллаута: `> [!quote|beresta yellow]+ …`. Obsidian
+ * кладёт её в `data-callout-metadata`, и здесь она становится узким корешком
+ * слева от блока. Доводы, почему цвет едет так, а не словом в тексте заметки,
+ * — в `src/render/defaults.ts`, у самого шаблона.
+ *
+ * **Слово `beresta` в каждом правиле — граница чужого.** Метку коллаута люди
+ * пишут и сами (`[!note|left]` для картинки, `[!tip|yellow]` для своего), и
+ * правило по одному имени цвета красило бы их блоки тоже. Плагин красит ровно
+ * то, что нарисовал сам.
+ *
+ * **Краски — темы, а не наши.** `--color-yellow` и соседние объявлены самим
+ * Obsidian и переопределяются темой человека: корешок остаётся различимым и на
+ * светлой, и на тёмной, и не спорит с той единственной темой, под которую его
+ * подбирали бы вручную. Значений `#rrggbb` здесь нет ни одного — по той же
+ * причине, по которой их нет во всём этом файле.
+ *
+ * **Трогается ровно одна сторона рамки.** `--callout-color` у блоков с цитатой
+ * не переопределяется вовсе: в Obsidian 1.13 это готовый цвет, а в 1.4 (наш
+ * `minAppVersion`) — тройка `r, g, b`, и одна и та же строка на двух сборках
+ * дала бы либо цвет, либо ничего. Значок, заголовок и подложка коллаута
+ * остаются такими, какими их сделала тема.
+ *
+ * **`gray` в списке нет намеренно.** Серая пометка — это и есть цвет коллаута
+ * `[!quote]` по умолчанию (`--callout-quote`), и красить её значило бы
+ * подкрашивать серое серым. Незнакомого имени цвета и литерального `#rrggbb` в
+ * списке тоже нет: угадывать чужую палитру нечем, а имя всё равно осталось в
+ * исходнике заметки открытым словом.
+ */
+.callout[data-callout-metadata~="beresta"][data-callout-metadata~="blue"] {
+  --beresta-mark-color: var(--color-blue);
+}
+.callout[data-callout-metadata~="beresta"][data-callout-metadata~="yellow"] {
+  --beresta-mark-color: var(--color-yellow);
+}
+.callout[data-callout-metadata~="beresta"][data-callout-metadata~="green"] {
+  --beresta-mark-color: var(--color-green);
+}
+.callout[data-callout-metadata~="beresta"][data-callout-metadata~="red"] {
+  --beresta-mark-color: var(--color-red);
+}
+.callout[data-callout-metadata~="beresta"][data-callout-metadata~="purple"] {
+  --beresta-mark-color: var(--color-purple);
+}
+.callout[data-callout-metadata~="beresta"][data-callout-metadata~="orange"] {
+  --beresta-mark-color: var(--color-orange);
+}
+/* `magenta` наше, `pink` — имя той же краски у Obsidian. */
+.callout[data-callout-metadata~="beresta"][data-callout-metadata~="magenta"] {
+  --beresta-mark-color: var(--color-pink);
+}
+
+/* Корешок — у всех наших блоков одинаковой ширины, и цветной там, где цвет
+   узнан. Ширина одна и та же нарочно: иначе блок с незнакомым цветом стоял бы
+   в секции на три точки левее соседей без всякой причины. */
+.callout[data-callout-metadata~="beresta"] {
+  border-inline-start: 3px solid var(--beresta-mark-color, transparent);
+}
+
+/* Пометка без цитаты (`[!note]`) не заводит СВОЕГО цвета.
+ *
+ * `[!note]` у Obsidian синий — и на блоке, помеченном жёлтым, спорили бы два
+ * цвета: синяя подложка от вида коллаута и жёлтый корешок от самой пометки.
+ * Цвет на блоке один, и он принадлежит пометке человека, а не нашему выбору
+ * коллаута. Серым здесь берётся цвет цитаты, а не своё значение: у него в
+ * каждой сборке Obsidian та же форма записи, что у `--callout-color` рядом, —
+ * поэтому строка верна и на 1.4, и на 1.13. Карандаш в значке остаётся: он и
+ * говорит, что это пометка, а не речь автора. */
+.callout[data-callout="note"][data-callout-metadata~="beresta"] {
+  --callout-color: var(--callout-quote, var(--callout-default));
+}

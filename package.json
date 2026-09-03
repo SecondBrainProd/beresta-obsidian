@@ -1,0 +1,20 @@
+{
+  "name": "beresta-obsidian-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Плагин Obsidian: выписки Beresta приезжают в заметки о книгах.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "esbuild": "^0.28.2",
+    "obsidian": "^1.13.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}

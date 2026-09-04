@@ -3,6 +3,8 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, test } from "vitest";
 
+import { IN_MONOREPO } from "./monorepo";
+
 import {
   INTERVAL_FIELD,
   KEEP_BACKUPS_FIELD,
@@ -44,7 +46,9 @@ function appNote(): string {
   return value.toLowerCase();
 }
 
-describe("Текст приложения про настройки плагина", () => {
+// В публичной копии плагина каталога строк приложения нет — набор
+// пропускается (см. `monorepo.ts`); в монорепозитории пропажа — красное.
+describe.skipIf(!IN_MONOREPO)("Текст приложения про настройки плагина", () => {
   test("каждая настройка плагина в тексте упомянута", () => {
     // Ключевое слово имени, по которому настройку узнаёт человек. Не всё имя:
     // текст пересказывает, а не цитирует.

@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, test } from "vitest";
 
+import { IN_MONOREPO } from "./monorepo";
+
 import {
   ForeignSnapshotFormat,
   SNAPSHOT_FORMAT,
@@ -350,7 +352,9 @@ describe("отпечаток считается так же, как CryptoKit", 
   });
 });
 
-describe("границы формата совпадают со стороной Swift", () => {
+// В публичной копии плагина исходника приложения нет — набор пропускается
+// (см. `monorepo.ts`); в монорепозитории пропажа файла — красное.
+describe.skipIf(!IN_MONOREPO)("границы формата совпадают со стороной Swift", () => {
   const swiftSource = fileURLToPath(
     new URL(
       "../../beresta-core/Sources/BerestaCore/Export/ExportManifest.swift",

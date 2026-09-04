@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 
 import { SNAPSHOT_FORMAT, SNAPSHOT_FORMAT_VERSION } from "../src/snapshot/model";
+import { DOCS_ROOT, IN_MONOREPO, MONOREPO_ROOT } from "./monorepo";
 
 // Документ открытого формата (`docs/vault-export.md`) против кода, который этот
 // формат пишет и читает.
@@ -27,22 +28,27 @@ import { SNAPSHOT_FORMAT, SNAPSHOT_FORMAT_VERSION } from "../src/snapshot/model"
 // объявляет, и сравнивается с тем, что объявляет код. Умный разбор Markdown
 // умеет «не найти» поле и промолчать; грубый либо находит, либо краснеет.
 
-const repoRoot = new URL("../../../", import.meta.url);
-
 function read(relative: string): string {
-  return readFileSync(fileURLToPath(new URL(relative, repoRoot)), "utf8");
+  return readFileSync(fileURLToPath(new URL(relative, MONOREPO_ROOT)), "utf8");
 }
 
-const document = read("docs/vault-export.md");
-const annotationJSONLD = read(
-  "packages/beresta-core/Sources/BerestaCore/Export/AnnotationJSONLD.swift",
+// Документ есть в обеих раскладках: в монорепозитории — `docs/` дерева, в
+// публичной копии плагина — её собственный `docs/`. Исходник приложения есть
+// только в первой; в копии эти строки пусты, а проверки по ним пропущены
+// (см. `monorepo.ts`).
+const document = readFileSync(
+  fileURLToPath(new URL("docs/vault-export.md", DOCS_ROOT)),
+  "utf8",
 );
-const snapshotPlan = read(
-  "packages/beresta-core/Sources/BerestaCore/Export/VaultSnapshotPlan.swift",
-);
-const contextResource = read(
-  "packages/beresta-core/Sources/BerestaCore/Export/Resources/context.jsonld",
-);
+const annotationJSONLD = IN_MONOREPO
+  ? read("packages/beresta-core/Sources/BerestaCore/Export/AnnotationJSONLD.swift")
+  : "";
+const snapshotPlan = IN_MONOREPO
+  ? read("packages/beresta-core/Sources/BerestaCore/Export/VaultSnapshotPlan.swift")
+  : "";
+const contextResource = IN_MONOREPO
+  ? read("packages/beresta-core/Sources/BerestaCore/Export/Resources/context.jsonld")
+  : "";
 
 /**
  * Две языковые половины документа по отдельности.
@@ -132,7 +138,7 @@ function indexFieldsInCode(): string[] {
   return [...found].sort();
 }
 
-describe("документ открытого формата согласен с кодом", () => {
+describe("документ открытого формата согласен с плагином", () => {
   test("версия формата в документе — та же, что в коде, и названа обеими половинами", () => {
     const versions = (text: string): number[] =>
       [...text.matchAll(/`formatVersion` = (\d+)/g)].map((match) => Number(match[1]));
@@ -151,15 +157,6 @@ describe("документ открытого формата согласен с
       );
     }
 
-    const swift = read("packages/beresta-core/Sources/BerestaCore/Export/ExportManifest.swift");
-    const inSwift = swift.match(/static let formatVersion\s*=\s*(\d+)/);
-    if (!inSwift) {
-      throw new Error(
-        "в ExportManifest.swift нет объявления «static let formatVersion». Оно переехало — " +
-          "восстановить надо границу, а не проверку.",
-      );
-    }
-    expect(Number(inSwift[1])).toBe(SNAPSHOT_FORMAT_VERSION);
   });
 
   test("имя формата в документе — то же, что в коде, и названо обеими половинами", () => {
@@ -173,6 +170,24 @@ describe("документ открытого формата согласен с
       expect(row, `${half.name}: нет строки таблицы про поле format`).toBeDefined();
       expect(row, half.name).toContain(SNAPSHOT_FORMAT);
     }
+  });
+
+});
+
+// Дальше — сверка с исходником приложения. В публичной копии плагина его
+// нет — набор пропускается (см. `monorepo.ts`); в монорепозитории пропажа
+// файла — красное с его именем.
+describe.skipIf(!IN_MONOREPO)("документ открытого формата согласен с кодом приложения", () => {
+  test("версия формата — та же, что объявляет ExportManifest", () => {
+    const swift = read("packages/beresta-core/Sources/BerestaCore/Export/ExportManifest.swift");
+    const inSwift = swift.match(/static let formatVersion\s*=\s*(\d+)/);
+    if (!inSwift) {
+      throw new Error(
+        "в ExportManifest.swift нет объявления «static let formatVersion». Оно переехало — " +
+          "восстановить надо границу, а не проверку.",
+      );
+    }
+    expect(Number(inSwift[1])).toBe(SNAPSHOT_FORMAT_VERSION);
   });
 
   test("каждое поле beresta:, которое пишет сериализатор, описано обеими половинами", () => {

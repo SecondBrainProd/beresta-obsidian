@@ -3,6 +3,8 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, test } from "vitest";
 
+import { IN_MONOREPO } from "./monorepo";
+
 import {
   EXPORT_BOOKS_FOLDER_NAME,
   EXPORT_FOLDER_NAME,
@@ -45,7 +47,9 @@ function swiftConstant(name: string): string {
   return match[1];
 }
 
-describe("адрес снимка совпадает со стороной приложения", () => {
+// В публичной копии плагина исходника приложения нет — набор пропускается
+// (см. `monorepo.ts`); в монорепозитории пропажа файла — красное.
+describe.skipIf(!IN_MONOREPO)("адрес снимка совпадает со стороной приложения", () => {
   test("папка снимка — та же, что пишет Swift", () => {
     expect(EXPORT_FOLDER_NAME).toBe(swiftConstant("exportFolderName"));
   });
@@ -57,7 +61,9 @@ describe("адрес снимка совпадает со стороной пр�
   test("имя указателя — то же", () => {
     expect(EXPORT_INDEX_FILE_NAME).toBe(swiftConstant("indexFileName"));
   });
+});
 
+describe("адрес снимка сам по себе", () => {
   // Точка в начале — то, ради чего папку так и назвали: по замеру задачи 2
   // Obsidian такую папку не показывает, не индексирует и не тянет в граф.
   test("имя папки начинается с точки, иначе снимок полезет в поиск и граф", () => {

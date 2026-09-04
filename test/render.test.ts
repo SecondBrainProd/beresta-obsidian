@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, test } from "vitest";
 
+import { IN_MONOREPO } from "./monorepo";
+
 import { DEFAULT_TEMPLATE } from "../src/render/defaults";
 import { LINK_CFI_QUERY, LINK_HOST, LINK_SCHEME, bookOpenLink } from "../src/render/link";
 import {
@@ -599,7 +601,9 @@ describe("шаблон человека ошибается словами", () =
   });
 });
 
-describe("ссылка в приложение совпадает со стороной Swift", () => {
+// В публичной копии плагина исходника приложения нет — набор пропускается
+// (см. `monorepo.ts`); в монорепозитории пропажа файла — красное.
+describe.skipIf(!IN_MONOREPO)("ссылка в приложение совпадает со стороной Swift", () => {
   const swiftSource = fileURLToPath(
     new URL("../../beresta-core/Sources/BerestaCore/Export/DeepLink.swift", import.meta.url),
   );
@@ -618,12 +622,50 @@ describe("ссылка в приложение совпадает со стор�
     return match[1]!;
   }
 
+  /**
+   * Узел с 20260903 объявлен не константой, а перечислением `Destination`:
+   * ссылка научилась вести и в карточку книги (`card`), не только в
+   * читалку (`open`). Плагин шлёт только в читалку — значит сверяется с
+   * `case reader`. Сторож ловит и пропажу перечисления, и пропажу случая:
+   * оба означают, что граница со Swift ушла, а не что её можно не сверять.
+   */
+  function swiftDestination(caseName: string): string {
+    const source = readFileSync(swiftSource, "utf8");
+    const start = source.indexOf("enum Destination");
+    if (start < 0) {
+      throw new Error(
+        `в ${swiftSource} нет перечисления «Destination». Узлы ссылки переехали — ` +
+          "общая граница со Swift потеряна, и её надо восстановить, а не убрать " +
+          "эту проверку.",
+      );
+    }
+    const match = source.slice(start).match(new RegExp(`case ${caseName}\\s*=\\s*"([^"]*)"`));
+    if (!match) {
+      throw new Error(
+        `в перечислении «Destination» нет случая «${caseName}» со строковым значением. ` +
+          "Он переименован или потерял сырое значение — ссылка из заметки перестала бы " +
+          "открывать книгу, оставаясь живой на вид.",
+      );
+    }
+    return match[1]!;
+  }
+
   test("схема, узел и имя поля — те же, что объявляет DeepLink", () => {
     expect(LINK_SCHEME).toBe(swiftConstant("scheme"));
-    expect(LINK_HOST).toBe(swiftConstant("host"));
+    expect(LINK_HOST).toBe(swiftDestination("reader"));
     expect(LINK_CFI_QUERY).toBe(swiftConstant("cfiQueryName"));
   });
 
+  test("поле с отпечатком файла объявлено на стороне Swift и не переименовано", () => {
+    // Плагин это поле пока не шлёт: ссылка из заметки ведёт в книгу по
+    // опознавателю и месту. Но знать имя обязан — иначе однажды добавит
+    // своё, и две стороны разойдутся молча.
+    expect(swiftConstant("fileQueryName")).toBe("file");
+  });
+
+});
+
+describe("ссылка в приложение собирается по правилам", () => {
   test("скобки CFI закодированы — иначе ссылка обрывается в разметке заметки", () => {
     const link = bookOpenLink("9504E37E-2CE3-5AD4-81F9-35414188FAC9", "epubcfi(/6/8!/4/2/2)");
     expect(link).not.toContain("(");

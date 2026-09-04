@@ -8,3 +8,6 @@ main.js.map
 
 # Замер веса Nunjucks и прочие временные сборки (`esbuild.config.mjs --out`).
 tmp/
+
+# Зависимости ставятся `npm ci`; в репозиторий не кладутся.
+node_modules/

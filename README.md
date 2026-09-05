@@ -8,7 +8,7 @@ The point is the *next to*. Your reading lives in two halves — quotes in a rea
 
 ## Requirements
 
-- The **Beresta** app for macOS. The plugin reads what Beresta writes; without it there is nothing to read.
+- The **Beresta** app — for macOS, or for iPhone and iPad. The plugin reads what Beresta writes; without it there is nothing to read. On the Mac you pick the vault folder in the app; on iPhone and iPad you pick it in the Files app. Both write the same snapshot to the same hidden folder.
 - **Obsidian 1.4.0 or newer.** That is the version that introduced `vault.process`, which is how the plugin writes into a note without stepping on an editor that has the file open. Measured against Obsidian 1.13.7 on macOS; see "Not tested" below.
 
 ## How it works
@@ -110,7 +110,7 @@ The Beresta app, for its part, writes to `.beresta/` and to nothing else in the 
 
 ## Not tested
 
-- **Mobile.** The plugin declares no `isDesktopOnly`, because it honestly uses neither Node nor the network and has no reason to be desktop-only. But everything above was measured on macOS. Mobile Obsidian is untested, and until it is measured, working there is not a promise. (Beresta itself is a macOS app today, so on mobile there would be nothing writing the snapshot anyway — unless your vault syncs it over from the Mac.)
+- **Mobile.** The plugin declares no `isDesktopOnly`, because it honestly uses neither Node nor the network and has no reason to be desktop-only. But everything above was measured on macOS. Mobile Obsidian is untested, and until it is measured, working there is not a promise. (The snapshot itself is not the obstacle: Beresta for iPhone and iPad writes it into the vault folder you pick in Files, and a vault synced over from a Mac carries it too. What is unmeasured is the plugin reading it inside mobile Obsidian.)
 - **Obsidian Sync's behaviour with the `.beresta/` folder.** Untested.
 
 ## Development
@@ -139,4 +139,4 @@ A release is exactly three files — `main.js`, `manifest.json`, `styles.css`. `
 
 ## Licence
 
-MIT — see [LICENSE](LICENSE) next to this file. The plugin is open source and free. The Beresta reader application it takes highlights from is a separate, proprietary paid app for macOS.
+MIT — see [LICENSE](LICENSE) next to this file. The plugin is open source and free. The Beresta reader application it takes highlights from is a separate, proprietary paid app for macOS and iOS.

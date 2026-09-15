@@ -65,6 +65,7 @@ const ITEM_KEYS = [
   "target",
   "beresta:type",
   "beresta:color",
+  "beresta:style",
   "beresta:colorHex",
   "beresta:sortIndex",
   "beresta:pageLabel",

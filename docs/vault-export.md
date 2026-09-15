@@ -224,6 +224,7 @@ jq 'keys, (.books[0] | keys), (.books | length), ([.books[].total] | add)' \
 | `beresta:removed` | собрание | Надгробия мягко удалённых выписок |
 | `beresta:deletedAt` | внутри `beresta:removed` | Момент мягкого удаления, ISO 8601 |
 | `beresta:type` | выписка | Вид пометки: `highlight`, `underline`, `note`, `text`, `area`, `ink`. В модели W3C ему места нет: `motivation` отвечает на другой вопрос, и `highlight` с `underline` схлопнулись бы в один `highlighting` |
+| `beresta:style` | выписка | Начертание черты: `solid`, `wavy`. Ключа нет — вид не выбирали, и пометка рисуется умолчанием своего вида. Не оформление ради оформления: сплошным и волнистым владелец различает пометки между собой (формат 1.14) |
 | `beresta:color` | выписка | Имя цвета выделения (`blue`). По нему красит тема оформления и по нему же ищут |
 | `beresta:colorHex` | выписка | Значение цвета (`#4a90d9`) — для того, кто нашей палитры имён не знает |
 | `beresta:sortIndex` | выписка | Ключ порядка внутри книги. **Строка, а не число**: дробный индекс между соседями |
@@ -605,6 +606,7 @@ Fifteen names, and that is the whole list. The `beresta:` prefix expands to
 | `beresta:removed` | collection | Tombstones of softly deleted highlights |
 | `beresta:deletedAt` | inside `beresta:removed` | The moment of soft deletion, ISO 8601 |
 | `beresta:type` | highlight | The kind of mark: `highlight`, `underline`, `note`, `text`, `area`, `ink`. The W3C model has no place for it: `motivation` answers a different question, and `highlight` and `underline` would collapse into one `highlighting` |
+| `beresta:style` | highlight | How the line is drawn: `solid`, `wavy`. No key means the style was never chosen and the mark is drawn with its kind's default. Not decoration for its own sake: the reader tells marks apart by it (format 1.14) |
 | `beresta:color` | highlight | The colour name (`blue`). The theme paints by it and people search by it |
 | `beresta:colorHex` | highlight | The colour value (`#4a90d9`) — for a reader who does not know our palette of names |
 | `beresta:sortIndex` | highlight | The ordering key within the book. **A string, not a number**: a fractional index between neighbours |

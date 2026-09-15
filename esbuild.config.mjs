@@ -63,7 +63,7 @@ export function buildOptions(overrides = {}) {
       js:
         "/*\n" +
         " * Beresta — плагин Obsidian. Собран из исходников esbuild, не минифицирован.\n" +
-        " * Лицензия MIT, © 2026 Dmitry Laukhin (Second Brain Production). Исходники открыты.\n" +
+        " * Лицензия MIT, © 2026 Dmitriy Laukhin (Second Brain Production). Исходники открыты.\n" +
         " * Плагин не обращается в сеть и не читает ничего за пределами хранилища.\n" +
         " */",
     },

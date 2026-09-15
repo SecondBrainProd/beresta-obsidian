@@ -142,17 +142,19 @@ SELECT identifier FROM grdb_migrations ORDER BY rowid;
 `v38_manual_fields`, `v39_reading_journal`, `v40_manual_tags`,
 `v41_inbox_status`, `v42_book_relations`, `v43_feeds`, `v44_supplement_kind`,
 `v45_collection_tree`, `v46_annotation_review`,
-`v47_session_file_and_collection_kind_name`.
+`v47_session_file_and_collection_kind_name`, `v48_book_content_search`,
+`v49_zotero_sort_index`, `v50_annotation_style`, `v51_ink_stroke_colour`,
+`v52_role_of_record_shared`.
 Нумерация может
 содержать пропуски: имя миграции — это идентификатор, а не счётчик, и номер,
 занятый параллельной работой, второй раз не выдаётся.
 
 Кроме описанных ниже таблиц в файле лежат служебные, которые этот документ не
 описывает и содержимое которых стороннему коду не пригодится:
-`sqlite_sequence` (счётчики `AUTOINCREMENT`, заводит сама SQLite) и восемь
+`sqlite_sequence` (счётчики `AUTOINCREMENT`, заводит сама SQLite) и двенадцать
 теневых таблиц FTS5 — `bookSearch_data`, `bookSearch_idx`,
-`bookSearch_docsize`, `bookSearch_config` и столько же у второго индекса,
-`annotationSearch_*`.
+`bookSearch_docsize`, `bookSearch_config`, столько же у второго индекса,
+`annotationSearch_*`, и столько же у третьего, `bookContentSearch_*`.
 
 ### Совместимость: что обещает версия 1.0
 
@@ -183,13 +185,13 @@ SELECT identifier FROM grdb_migrations ORDER BY rowid;
 
 ```sql
 PRAGMA application_id;   -- 1112691540 → это файл Beresta
-PRAGMA user_version;     -- 1012       → версия формата 1.12
+PRAGMA user_version;     -- 1016       → версия формата 1.16
 ```
 
 - `application_id` = 1112691540 — это ASCII «BRST», отпечаток «файл Beresta».
   Другое ненулевое значение означает файл чужой программы, и совпадение имён
   таблиц в нём ничего не значит.
-- `user_version` = 1012 — версия формата числом по правилу
+- `user_version` = 1016 — версия формата числом по правилу
   `старшая × 1000 + младшая`: 1.0 → 1000, 1.1 → 1001, 2.0 → 2000.
   Младшая доля росла семь раз: `v36_article_kind` дала книге вид записи и
   адрес первоисточника, а словарю форматов — `html`; `v37_article_shelf`
@@ -208,7 +210,26 @@ PRAGMA user_version;     -- 1012       → версия формата 1.12
   FSRS-6, счёт встреч и момент последнего ответа (формат 1.11);
   `v47_session_file_and_collection_kind_name` добавила файл у отрезка
   чтения (`readingSession.fileSHA256`) и ослабила уникальность имени
-  коллекции до пары «род + имя» (формат 1.12).
+  коллекции до пары «род + имя» (формат 1.12);
+  `v48_book_content_search` завела полнотекстовый индекс СОДЕРЖИМОГО книг —
+  три сущности (`bookContent`, `bookContentSection`, `bookContentSearch`),
+  ни одной существующей таблицы не тронув (формат 1.13);
+  `v49_zotero_sort_index` **формы не тронула вовсе** — она чинит ЗНАЧЕНИЯ:
+  достраивает ключ порядка выпискам, ввезённым из Zotero до 20260912 с пустым
+  ключом (такие не рисовались в читалке никогда). Поэтому версия формата
+  осталась 1.13, а снимок `frozen-1.0.txt` — прежним;
+  `v50_annotation_style` добавила начертание пометки (`annotation.style`) —
+  одна необязательная колонка со своим словарём значений, ни одной
+  существующей не тронув (формат 1.14);
+  `v51_ink_stroke_colour` **таблиц не тронула вовсе** — она расширила форму
+  ВНУТРИ привязки: у штриха росчерка появился свой цвет
+  (`position.paths[].color`, формат 1.15). Схема осталась прежней, и снимок
+  `frozen-1.0.txt` не изменился — но версия поднята явно, потому что форма
+  данных расширилась, а читатель вправе знать, чего ему ждать;
+  `v52_role_of_record_shared` **таблиц тоже не тронула** — она сменила СМЫСЛ
+  строк: четыре ключа «роли записи» стали ОБЩИМИ настройками (`setting.deviceId
+  = ''`) вместо настроек одного устройства (формат 1.16). См. «Роль записи —
+  общая настройка» ниже.
   Читатель, знающий только 1.0, читает такой файл по-прежнему правильно.
 
 **Почему не список миграций.** Он отвечает на другой вопрос — «сколько работ
@@ -745,6 +766,7 @@ Beresta не умеет и не будет.
 | `reviewDifficulty` | REAL | NULL | Сложность FSRS-6, 1…10. Миграция **v46**. |
 | `reviewCount` | INTEGER | NULL | Сколько раз человек отвечал на эту выписку. NULL — ни разу; умолчания `0` нет нарочно, иначе «ни разу не показывали» не отличалось бы от «сняли с расписания». Миграция **v46**. |
 | `reviewLastAt` | TEXT | NULL | Когда человек отвечал в последний раз, ISO 8601 UTC. От него, а не от назначенного срока, считается прожитое время: человек отвечает когда придёт. Миграция **v46**. |
+| `style` | TEXT | NULL | Начертание пометки: `solid` (сплошная) или `wavy` (волнистая). Закрытый словарь, проверяется базой. NULL — вид не выбирали, и это состояние ВСЕХ выписок старше формата 1.14; умолчания `'solid'` в базе нет нарочно — оно соврало бы, что человек выбрал сплошное, и запретило бы когда-нибудь сменить умолчание, не переписав чужой выбор. Пустоту превращает в вид ровно одно место в коде (`Annotation.drawnStyle`). Отдельная колонка, а не новые значения `type`: см. «Начертание — не тип». Дописана В КОНЕЦ таблицы. Миграция **v50**. |
 
 Четыре колонки миграции v28 дописаны `ALTER TABLE ADD COLUMN` и потому стоят В
 КОНЦЕ, в перечисленном порядке; таблица не пересобиралась (в последний раз это
@@ -807,6 +829,17 @@ Beresta не умеет и не будет.
 сразу 217 выписок. Стороннему коду отсюда следует правило: цвет не несёт
 смысла, кроме того, который в него вложил человек глазами, и читать его как
 назначение нельзя.
+
+**Начертание — не тип.** Пятая величина, заведённая форматом 1.14: `style`
+отвечает на вопрос «КАК нарисовано» (сплошной чертой или волнистой), тогда как
+`type` — «ЧТО это за метка». Соблазн добавить случаи `underlineWavy` прямо в
+`type` отвергнут по двум причинам сразу, и обе про чужой код. Первая: `type`
+ездит синхронизацией и приезжает из Zotero и Calibre, а его словарь значений
+база ОТКАЗЫВАЕТ — версия приложения постарше не смогла бы записать приехавшую
+строку вовсе, а не просто нарисовала бы её по-своему. Вторая: следующий ввоз из
+источника, который про начертания ничего не знает, перезаписал бы `type`
+обратно, унеся выбор человека. Отдельную необязательную колонку старый читатель
+просто не видит, а ввоз её не трогает.
 
 **Состояние разбора ХРАНИТСЯ, а не выводится из наличия комментария.** Второй
 соблазн — «есть своя мысль, значит разобрано» — проверен тем же замером:
@@ -1567,6 +1600,59 @@ v18): цитата ценна сама по себе, и снимок храни
 `annotationSearch_config`. Это внутреннее устройство FTS5; читать и писать их
 напрямую нельзя, при перечислении таблиц базы их следует пропускать.
 
+#### `bookContent`
+
+Состояние разбора ОДНОГО файла книги для полнотекстового поиска по тексту.
+Добавлена миграцией v48 (формат 1.13). Подробнее — в разделе «Связь с
+полнотекстовым поиском».
+
+Строка на файл, а не на книгу: у книги файлов бывает несколько (EPUB рядом с
+PDF), текст у них разный, и разбирается каждый сам по себе. Она же — место
+«докуда дошли»: доводчик индекса не хранит номер последней книги, он
+спрашивает, у каких файлов такой строки ещё нет, — и обрыв индексации поэтому
+ничего не теряет.
+
+| Колонка | Тип | Ограничения | Смысл |
+|---|---|---|---|
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | Локальный номер строки. |
+| `fileSHA256` | TEXT | NOT NULL, UNIQUE | Отпечаток разобранного файла — тот же, что в `bookFile.sha256`. Ссылки на `bookFile` здесь нет нарочно: замена издания сама себя переиндексирует, потому что у нового файла другой отпечаток и строки под него ещё нет. |
+| `format` | TEXT | NOT NULL | Формат, которым файл разбирали (`epub`, `fb2`, `pdf`). |
+| `outcome` | TEXT | NOT NULL, закрытый словарь | Чем кончился разбор: `indexed` — текст лёг в индекс; `noText` — файл открылся, страницы есть, текста нет ни на одной (у PDF это скан); `locked` — файл заперт паролем; `unreadable` — файл не открылся или его байтов нет в хранилище; `unsupported` — формат разбирать не умеем. Словарь сторожит триггер базы. |
+| `rule` | INTEGER | NOT NULL | Версия правила извлечения текста. Переиндексация после правки разбора — это смена одного числа: доводчик сам увидит, что строки собраны прошлым правилом. |
+| `sectionCount` | INTEGER | NOT NULL, default `0` | Сколько разделов файла легло в индекс. У исхода не `indexed` — ноль. |
+| `indexedAt` | TEXT | NOT NULL | Когда разбирали, ISO 8601. Отметка ЭТОГО устройства о сделанной работе. |
+
+#### `bookContentSection`
+
+Адрес одного раздела в индексе содержимого. Добавлена миграцией v48.
+
+| Колонка | Тип | Ограничения | Смысл |
+|---|---|---|---|
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | Локальный номер строки. Он же — `rowid` строки индекса `bookContentSearch`: индекс бесконтентный и своей связи с этой таблицей не имеет, связь держится равенством номеров. |
+| `contentId` | INTEGER | NOT NULL, FK → `bookContent.id` ON DELETE CASCADE | Файл, которому раздел принадлежит. |
+| `sectionIndex` | INTEGER | NOT NULL, UNIQUE вместе с `contentId` | Номер раздела В ТОМ ЖЕ СЧЁТЕ, каким называет раздел читалка: строка спайна у EPUB (то есть та же величина, которой адресуют место привязки Calibre), порядок разделов движка у FB2, номер страницы с нуля у PDF. Свой счёт означал бы, что переход по находке садится мимо. |
+
+Удаление строки `bookContent` каскадом уносит её разделы, а триггер
+`bookContentSection_search_on_delete` — соответствующие строки индекса.
+Уборка живёт в схеме, а не в коде, потому что каскад проходит мимо кода: в
+индексе иначе копился бы мусор, который потом находится поиском и ведёт в
+никуда.
+
+#### `bookContentSearch` (виртуальная, FTS5)
+
+Индекс полнотекстового поиска по ТЕКСТУ книг. Добавлен миграцией v48.
+Подробнее — в разделе «Связь с полнотекстовым поиском».
+
+| Колонка | Тип | Смысл |
+|---|---|---|
+| `text` | без объявленного типа | Нормализованный текст одного раздела. Таблица объявлена БЕСКОНТЕНТНОЙ (`content=''`), поэтому прочитать это значение обратно нельзя вовсе: `SELECT text FROM bookContentSearch` возвращает `NULL`. Индекс отвечает на вопрос «где слово есть», а не «какой там текст». |
+
+Рядом с ней SQLite сам заводит четыре теневые таблицы —
+`bookContentSearch_data`, `bookContentSearch_idx`,
+`bookContentSearch_docsize`, `bookContentSearch_config`. Это внутреннее
+устройство FTS5; читать и писать их напрямую нельзя, при перечислении таблиц
+базы их следует пропускать.
+
 ### Форматы значений
 
 Часть решений не выводится из типов колонок (SQLite хранит даты, JSON и
@@ -1607,6 +1693,7 @@ v18): цитата ценна сама по себе, и снимок храни
 | `reading.purpose` | `newKnowledge`, `deeperDive`, `otherView`, `recommended`, `trending`, `motivation`, `fun`, `familiarAuthor`, `sleep`, `spiritual` — миграция **v27**; колонка НЕОБЯЗАТЕЛЬНА, NULL проходит (см. оговорку 1 ниже) |
 | `reading.depth` | `skimmed`, `scanned`, `read`, `studied` — миграция **v27**; колонка НЕОБЯЗАТЕЛЬНА, NULL проходит |
 | `annotation.intent` | `implement`, `remember` — миграция **v28**; колонка НЕОБЯЗАТЕЛЬНА, NULL проходит |
+| `annotation.style` | `solid`, `wavy` — миграция **v50**; колонка НЕОБЯЗАТЕЛЬНА, NULL проходит |
 | `annotation.processed` | `raw`, `sorted`, `used` — миграция **v28**; колонка `NOT NULL` с умолчанием `raw` |
 | `collection.kind` | `books`, `articles` — миграция **v30**, значение `articles` добавлено **v37**; колонка `NOT NULL` с умолчанием `books` |
 | `bookCollection.reason` | `reread`, `gratitude`, `milestone` — миграция **v30**; колонка НЕОБЯЗАТЕЛЬНА, NULL проходит (см. оговорку 1 ниже) |
@@ -1780,8 +1867,8 @@ readable появится в подпроекте 2, формат зафикси
 ```
 
 **Росчерк (`ink`)** — поле `type` равно `"ink"`: страница (с нуля) и список
-штрихов по ней. Штрих — объект из толщины пера и точек в порядке рисования;
-координаты те же, что у `rects`, — координаты страницы PDF.
+штрихов по ней. Штрих — объект из толщины пера, необязательного цвета и точек в
+порядке рисования; координаты те же, что у `rects`, — координаты страницы PDF.
 
 ```json
 {
@@ -1790,11 +1877,29 @@ readable появится в подпроекте 2, формат зафикси
   "paths": [
     {
       "width": 2,
+      "color": "#1133ffcc",
       "points": [[10.5, 20.25], [11, 21, 0.62], [12, 22, 0.8, 1.05, 2.31]]
     }
   ]
 }
 ```
+
+**Цвет у ШТРИХА, а не у росчерка** (формат 1.15, миграция `v51`). До подъёма
+цвет жил одной колонкой `annotation.color` на всю страницу: человек рисовал
+синим и красным, видел на холсте два цвета, а при следующем открытии книги обе
+линии становились последним — разойтись им было негде.
+
+- **`#rrggbb` или `#rrggbbaa`** — шесть знаков, а с прозрачностью восемь.
+  Восемь именно здесь и только здесь: колонка `color` несёт шесть с самого
+  начала, по ней живут панель выписок, выгрузка и обмен, и менять её нельзя.
+- **Поля нет — цвета нет.** У штрихов старше 1.15 своего цвета не бывает, и
+  пустого `"color": null` формат не пишет: оно означало бы «цвет сняли», а не
+  «цвета не было». Такой штрих рисуется цветом строки (`annotation.color`).
+- **Колонка `color` у росчерка остаётся** и означает цвет росчерка в целом —
+  цвет последнего штриха. Она и есть ответ на вопрос «какого цвета эта пометка»
+  одним словом: панель и выгрузка спрашивают именно так.
+- Читатель формата 1.14 новое поле пропустит — оно необязательное, и росчерк
+  покажется цветом строки, как показывался.
 
 **Точка — массив чисел, и его ДЛИНА говорит, что о ней известно:**
 
@@ -2924,6 +3029,31 @@ NULL`) не маскирует общую, чтение проваливаетс
 `uuid`), значение в ней — `NULL`. Значение не воскресает при следующем
 чтении.
 
+**Роль записи — общая настройка** (формат 1.16, миграция
+`v52_role_of_record_shared`). Четыре ключа отвечают на вопрос о самой
+библиотеке, а не о том, как её показывает один экран, и потому обязаны лежать
+общими строками (`deviceId = ''`):
+
+| Ключ | Что отвечает |
+|---|---|
+| `shelf.golden.<повод>.uuid`, `shelf.golden.<повод>.articles.uuid` | какая коллекция служит Золотой полкой этого повода — для книг и для статей |
+| `shelf.<uuid коллекции>.limit` | сколько мест на этой полке (умолчание 28, см. `ShelfLimit`) |
+| `list.<uuid коллекции>.isReading` | эта коллекция — список чтения (`"1"`) |
+| `lists.smart` | правила умных списков, все одним JSON |
+
+До 1.16 все четыре писались строкой ОДНОГО устройства. Синхронизация везёт из
+`setting` только общие строки, поэтому ответы не уезжали никуда: на втором
+устройстве Золотая полка искалась заново по имени, список чтения выглядел
+обычной коллекцией, а умных списков не было вовсе. Миграция переносит уже
+записанное: берёт строку устройства С ЗНАЧЕНИЕМ (снятая строка общую не
+маскировала и раньше — чтение проваливается сквозь `NULL`), кладёт значение в
+общую строку и убирает устройские. При нескольких строках устройства побеждает
+самая свежая по `modifiedAt`, при равной дате — меньшая по `deviceId`.
+
+**Стороннему писателю формата это адресуется так:** ищите эти ключи среди строк
+с `deviceId = ''`. Строка с непустым `deviceId` на таком ключе — след файла,
+который ещё не прошёл миграцию `v52`.
+
 #### `book.readStatus`
 
 Одно из шести значений: `unread` (не открывалась ни разу), `inbox` (приехала
@@ -3092,12 +3222,23 @@ v41).** «Входящее» — это намерение разобрать, �
 теневые таблицы (`bookSearch_config`, `bookSearch_data`, `bookSearch_docsize`,
 `bookSearch_idx`), `annotationSearch` и четыре её теневые
 (`annotationSearch_config`, `annotationSearch_data`,
-`annotationSearch_docsize`, `annotationSearch_idx`), `grdb_migrations`.
+`annotationSearch_docsize`, `annotationSearch_idx`), индекс содержимого книг
+целиком — `bookContent`, `bookContentSection`, `bookContentSearch` и четыре
+теневые (`bookContentSearch_config`, `bookContentSearch_data`,
+`bookContentSearch_docsize`, `bookContentSearch_idx`), — `grdb_migrations`.
 
-Оба полнотекстовых индекса остаются здесь по одному и тому же основанию: они
-производные. Ни одна их строка не содержит того, чего нет в `book` и
-`annotation`, и на другом устройстве они соберутся из тех же книг и выписок
-сами.
+Все три полнотекстовых индекса остаются здесь по одному и тому же основанию:
+они производные. Ни одна строка `bookSearch` и `annotationSearch` не содержит
+того, чего нет в `book` и `annotation`, и на другом устройстве они соберутся из
+тех же книг и выписок сами.
+
+Индекс содержимого (v48) производен не от колонки, а от ФАЙЛА, и это его
+основание делает только твёрже: файлы уезжают своим обменом, а получатель
+разберёт их у себя тем же правилом. Уехать он не может ещё и по величине — 495
+МБ на библиотеке владельца против 59 МБ всей остальной базы. Отсюда прямое
+следствие для стороннего читателя: **встретив файл без этих таблиц или с
+пустым индексом, не падайте** — ищите по названию и автору, как раньше, а
+индекс соберётся, когда до него дойдут руки.
 
 **Почему позиция чтения не уезжает журналом.** Строка журнала весит около 390
 байт при живом наборе индексов; два поля на перелистывание — 780 байт, вечер
@@ -3667,6 +3808,67 @@ Beresta и не тронув эту колонку, вы получите стр
 ВТОРЫМ индексом по основам, а не сменой токенайзера у этого: сменённый
 токенайзер сделал бы несовместимыми уже собранные индексы.
 
+**Третий индекс — `bookContentSearch` (миграция v48), и устроен он ИНАЧЕ.**
+Разница не в мелочах, и стороннему коду её надо знать.
+
+**Он бесконтентный.** `content=''` означает, что таблица не хранит ни знака
+текста: `SELECT text FROM bookContentSearch` возвращает `NULL` для любой
+строки. Причина — величина. Замер 20260904 на библиотеке владельца (1,7 ГБ
+текста: 1911 EPUB, 813 PDF, 118 FB2) собранными настоящими индексами: с
+хранимым текстом индекс весит 2,2 ГБ, без него — 495 МБ, при том что вся
+остальная база — 59 МБ. Хранить текст значило бы раздуть файл в тридцать семь
+раз ради выдержки, которую и так даёт открытая книга.
+
+**Он не синхронизируется триггерами, потому что его источник — не колонка, а
+ФАЙЛ на диске.** У `bookSearch` и `annotationSearch` источник лежит в той же
+базе, и три триггера — единственный способ не дать индексу разойтись с ним.
+Здесь в базу не попадает ни текст, ни файл: строки индекса пишет тот, у кого
+текст на руках. А вот УДАЛЕНИЕ живёт в схеме: `bookContent` → каскад →
+`bookContentSection` → триггер `bookContentSection_search_on_delete`.
+
+**Он собирается из трёх сущностей.** `bookContent` — «этот файл разобран, вот
+чем это кончилось»; `bookContentSection` — «а в каком месте файла»;
+`bookContentSearch` — сам индекс, у которого `rowid` равен
+`bookContentSection.id`. Запрос стороннего кода выглядит так:
+
+```sql
+SELECT book.title, s.sectionIndex
+  FROM bookContentSearch f
+  JOIN bookContentSection s ON s.id = f.rowid
+  JOIN bookContent c ON c.id = s.contentId
+  JOIN bookFile bf ON bf.sha256 = c.fileSHA256 AND bf.deletedAt IS NULL
+  JOIN book ON book.id = bf.bookId
+ WHERE bookContentSearch MATCH 'перевал*'
+   AND book.deletedAt IS NULL AND book.mergedIntoUUID IS NULL;
+```
+
+**Нормализация — та же самая**, что у двух прежних индексов: и текст, и запрос
+проходят через свёртку регистра и «ё» → «е». Своё правило у третьего индекса
+означало бы запрос, который находит книгу по названию и не находит её же по
+тексту.
+
+**`contentless_delete=1` — часть объявления таблицы, а не украшение.** Без него
+бесконтентная таблица FTS5 не даёт удалить строку вовсе (`cannot DELETE from
+contentless fts5 table`), то есть книгу из индекса нельзя было бы убрать
+никогда. Параметр требует SQLite 3.43 или новее.
+
+**`detail` оставлен полным нарочно.** Втрое более лёгкий `detail=none` (153 МБ
+против 495) отвергнут потому, что с ним фразовый запрос падает ОШИБКОЙ
+(`fts5: phrase queries are not supported (detail!=full)`), `NEAR` тоже, а
+`bm25` отдаёт всем строкам один и тот же ноль — ранжирования нет вовсе.
+
+**Индекса может не быть, и это законное состояние файла.** Он производный и не
+уезжает на другие устройства: библиотека, перенесённая на другую машину,
+приезжает с файлами и без индекса, а собирается он заново из тех же байтов.
+Читатель, встретивший файл без этих трёх таблиц, обязан не падать, а искать по
+названию и автору, как раньше.
+
+**Пересобрать индекс командой FTS5 нельзя.** `INSERT INTO
+bookContentSearch(bookContentSearch) VALUES('rebuild')` у бесконтентной таблицы
+не работает: пересобирать не из чего, содержимого в базе нет. Единственный
+способ переиндексировать — разобрать файлы заново; в Beresta это делается
+сменой числа в `bookContent.rule`.
+
 ### Корни сборки мусора blob-хранилища
 
 Файлы книг и обложки не хранятся в базе — здесь только их SHA-256 (см.
@@ -3691,6 +3893,7 @@ content-addressed каталоге вне подпроекта 1a (`BlobStore`,
 | `annotation` | `bookCoverSHA256` |
 | `reading` | `fileSHA256` |
 | `bookmark` | `fileSHA256` |
+| `bookContent` | `fileSHA256` |
 
 `annotation.fileSHA256` попала в этот список не случайно: аннотация может
 быть привязана к КОНКРЕТНОЙ версии файла книги (полезно, если у книги
@@ -3741,6 +3944,23 @@ content-addressed каталоге вне подпроекта 1a (`BlobStore`,
 W3C и переживает замену файла, но пока файл на месте, именно он — то издание, в
 котором место найдено, и уборка, унёсшая его, отняла бы возможность сверить
 закладку с текстом, по которому она ставилась.
+
+`readingSession.fileSHA256` (миграция v47) — файл, по которому шёл отрезок
+чтения. Тот же довод, что у `reading.fileSHA256`: «по какому изданию я это
+читал» — часть записи о чтении, а отпечаток без содержимого не сравнить ни с
+чем. Строк на порядок больше, чем в `reading`, но удерживаемых файлов ровно
+столько же — те же файлы тех же книг. Пустое значение (отрезки до 1.12)
+законно и корнем не является. Пин **не временный**.
+
+`bookContent.fileSHA256` (миграция v48) — файл, текст которого лежит в
+полнотекстовом индексе. Строка индекса говорит «этот файл разобран, и вот в
+каких его разделах какие слова»; унеси уборка байты — поиск продолжал бы
+находить книгу и вести в файл, которого нет. Пин **временный**, и держится он
+не сам собой: разбор файла, на который больше не ссылается ни одна живая
+строка `bookFile`, обязан быть убран (`BookContentRepository.sweepOrphans`).
+Без такой уборки корень пришпилил бы навсегда КАЖДЫЙ когда-либо
+проиндексированный файл, включая давно заменённые издания, — и был бы уже не
+защитой, а утечкой.
 
 **Не всякая таблица, заведённая после этого списка, в него попадает — и это
 решение в обе стороны.** Ни `readerDecision` (v25), ни `annotationLayer` (v28),
@@ -3958,7 +4178,9 @@ The schema consists of the following migrations, in the order they are applied:
 `v38_manual_fields`, `v39_reading_journal`, `v40_manual_tags`,
 `v41_inbox_status`, `v42_book_relations`, `v43_feeds`, `v44_supplement_kind`,
 `v45_collection_tree`, `v46_annotation_review`,
-`v47_session_file_and_collection_kind_name`.
+`v47_session_file_and_collection_kind_name`, `v48_book_content_search`,
+`v49_zotero_sort_index`, `v50_annotation_style`, `v51_ink_stroke_colour`,
+`v52_role_of_record_shared`.
 Numbering may contain
 gaps: a migration name is an identifier, not a counter, and a number claimed
 by parallel work is never handed out twice.
@@ -3966,9 +4188,10 @@ by parallel work is never handed out twice.
 Besides the tables described below, the file holds housekeeping tables that
 this document does not describe and whose contents are of no use to
 third-party code: `sqlite_sequence` (`AUTOINCREMENT` counters, created by
-SQLite itself) and the eight FTS5 shadow tables — `bookSearch_data`,
-`bookSearch_idx`, `bookSearch_docsize`, `bookSearch_config` and the same four
-for the second index, `annotationSearch_*`.
+SQLite itself) and the twelve FTS5 shadow tables — `bookSearch_data`,
+`bookSearch_idx`, `bookSearch_docsize`, `bookSearch_config`, the same four
+for the second index, `annotationSearch_*`, and the same four for the third,
+`bookContentSearch_*`.
 
 ### Compatibility: what version 1.0 promises
 
@@ -3999,13 +4222,13 @@ are read without touching a single table:
 
 ```sql
 PRAGMA application_id;   -- 1112691540 → this is a Beresta file
-PRAGMA user_version;     -- 1012       → format version 1.12
+PRAGMA user_version;     -- 1016       → format version 1.16
 ```
 
 - `application_id` = 1112691540 — ASCII "BRST", the "this is Beresta" mark. Any
   other non-zero value means a file belonging to another program, and matching
   table names in it mean nothing.
-- `user_version` = 1012 — the format version as an integer, by the rule
+- `user_version` = 1016 — the format version as an integer, by the rule
   `major × 1000 + minor`: 1.0 → 1000, 1.1 → 1001, 2.0 → 2000. The minor part
   grew seven times: `v36_article_kind` gave books a record kind and a source
   address, and the format dictionary gained `html`; `v37_article_shelf` added
@@ -4023,8 +4246,27 @@ PRAGMA user_version;     -- 1012       → format version 1.12
   answer count and the moment of the last answer (format 1.11);
   `v47_session_file_and_collection_kind_name` added the file of a reading
   stretch (`readingSession.fileSHA256`) and relaxed collection name
-  uniqueness to the (kind, name) pair (format 1.12). A reader that only
-  knows 1.0 still reads such a file correctly.
+  uniqueness to the (kind, name) pair (format 1.12);
+  `v48_book_content_search` introduced the full-text index over the CONTENT of
+  books — three new entities (`bookContent`, `bookContentSection`,
+  `bookContentSearch`), with no existing table touched (format 1.13);
+  `v49_zotero_sort_index` **did not touch the shape at all** — it repairs
+  VALUES, filling in the order key of excerpts imported from Zotero before
+  20260912 with an empty one (those were never drawn in the reader), so the
+  format stayed 1.13 and the `frozen-1.0.txt` snapshot stayed as it was;
+  `v50_annotation_style` added the mark's style (`annotation.style`) — one
+  optional column with its own value dictionary, with no existing column
+  touched (format 1.14);
+  `v51_ink_stroke_colour` **did not touch any table** — it widened the shape
+  INSIDE the anchor: an ink stroke now carries its own colour
+  (`position.paths[].color`, format 1.15). The schema stayed the same and the
+  `frozen-1.0.txt` snapshot did not change — but the version was raised
+  explicitly, because the shape of the data grew and a reader is entitled to
+  know what to expect; `v52_role_of_record_shared` **did not touch any table
+  either** — it changed the MEANING of rows: four "role of record" keys became
+  SHARED settings (`setting.deviceId = ''`) instead of settings of a single
+  device (format 1.16). See "Role of record is a shared setting" below. A reader
+  that only knows 1.0 still reads such a file correctly.
 
 **Why not the migration list.** It answers a different question — "how much work
 has been applied to this file" — and cannot decide the important one: whether
@@ -4570,6 +4812,7 @@ of truth for annotation content; nothing is written back into the book file
 | `reviewDifficulty` | REAL | NULL | FSRS-6 difficulty, 1…10. Migration **v46**. |
 | `reviewCount` | INTEGER | NULL | How many times the reader answered on this excerpt. NULL means never; there is deliberately no `0` default, otherwise "never shown" would be indistinguishable from "removed from the schedule". Migration **v46**. |
 | `reviewLastAt` | TEXT | NULL | When the reader last answered, ISO 8601 UTC. Elapsed time is measured from this, not from the scheduled date: people answer when they come. Migration **v46**. |
+| `style` | TEXT | NULL | How the mark is DRAWN: `solid` or `wavy`. A closed dictionary, enforced by the database. NULL means the style was never chosen, which is the state of EVERY annotation older than format 1.14; there is deliberately no `'solid'` default in the database — it would claim the reader picked solid, and would forbid ever changing the default without rewriting someone else's choice. Exactly one place in the code turns the emptiness into a style (`Annotation.drawnStyle`). A separate column rather than new `type` values: see "Style is not type". Appended AT THE END of the table. Migration **v50**. |
 
 The four columns of migration v28 were appended with `ALTER TABLE ADD COLUMN`
 and therefore sit AT THE END, in the order listed; the table was not rebuilt
@@ -4635,6 +4878,17 @@ yellow, 2 red, 2 purple — and deriving intent from color would have declared o
 single route for 217 excerpts at once. The rule for third-party code: a color
 carries no meaning beyond the one a human put there by eye, and it must not be
 read as an intent.
+
+**Style is not type.** A fifth quantity, introduced by format 1.14: `style`
+answers "HOW it is drawn" (a solid line or a wavy one), while `type` answers
+"WHAT kind of mark it is". The temptation to add `underlineWavy` cases straight
+into `type` was rejected for two reasons, both about foreign code. First: `type`
+travels through sync and arrives from Zotero and Calibre, and its value
+dictionary is ENFORCED by the database — an older build of the app could not
+have written the incoming row at all, rather than merely drawing it its own way.
+Second: the next import from a source that knows nothing about styles would have
+overwritten `type` back, carrying the reader's choice away. A separate optional
+column is simply invisible to an old reader, and imports do not touch it.
 
 **The processing state is STORED, not derived from the presence of a comment.**
 The second temptation — "there's a thought written down, so it has been
@@ -5373,6 +5627,57 @@ Alongside it SQLite creates four shadow tables of its own —
 `annotationSearch_config`. They are FTS5 internals: never read or write them
 directly, and skip them when enumerating the database's tables.
 
+#### `bookContent`
+
+The parsing state of ONE book file for full-text search over its text. Added by
+migration v48 (format 1.13). See "Relationship with full-text search" for
+details.
+
+One row per file, not per book: a book may have several files (an EPUB next to
+a PDF), their text differs, and each is parsed on its own. This table is also
+the "how far we got" marker: the indexing worker keeps no cursor of its own, it
+asks which files have no such row yet — so an interrupted run loses nothing.
+
+| Column | Type | Constraints | Meaning |
+|---|---|---|---|
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | Local row number. |
+| `fileSHA256` | TEXT | NOT NULL, UNIQUE | Fingerprint of the parsed file — the same value as `bookFile.sha256`. There is deliberately no reference to `bookFile`: replacing an edition re-indexes itself, because the new file has a different fingerprint and no row for it yet. |
+| `format` | TEXT | NOT NULL | The format the file was parsed as (`epub`, `fb2`, `pdf`). |
+| `outcome` | TEXT | NOT NULL, closed dictionary | How parsing ended: `indexed` — text went into the index; `noText` — the file opened, pages exist, not one of them has any text (for a PDF that means a scan); `locked` — the file is password-protected; `unreadable` — the file did not open, or its bytes are not in the blob store; `unsupported` — we cannot parse that format. The dictionary is enforced by a database trigger. |
+| `rule` | INTEGER | NOT NULL | Version of the text-extraction rule. Re-indexing after a change to the parser is a change of this single number: the worker sees for itself that the rows were built by the previous rule. |
+| `sectionCount` | INTEGER | NOT NULL, default `0` | How many sections of the file went into the index. Zero for any outcome other than `indexed`. |
+| `indexedAt` | TEXT | NOT NULL | When it was parsed, ISO 8601. A record of work done by THIS device. |
+
+#### `bookContentSection`
+
+The address of one section inside the content index. Added by migration v48.
+
+| Column | Type | Constraints | Meaning |
+|---|---|---|---|
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | Local row number. It is also the `rowid` of the matching row in `bookContentSearch`: the index is contentless and has no link of its own to this table — the link is the equality of these numbers. |
+| `contentId` | INTEGER | NOT NULL, FK → `bookContent.id` ON DELETE CASCADE | The file the section belongs to. |
+| `sectionIndex` | INTEGER | NOT NULL, UNIQUE together with `contentId` | The section number IN THE SAME COUNT the reader uses: the spine row for EPUB (the very value Calibre anchors address a place with), the engine's section order for FB2, the zero-based page number for PDF. A count of our own would mean that following a hit lands in the wrong place. |
+
+Deleting a `bookContent` row cascades to its sections, and the trigger
+`bookContentSection_search_on_delete` removes the matching index rows. The
+cleanup lives in the schema rather than in code because the cascade bypasses
+code: otherwise the index would accumulate garbage that later turns up in search
+results and leads nowhere.
+
+#### `bookContentSearch` (virtual, FTS5)
+
+The full-text index over the TEXT of books. Added by migration v48. See
+"Relationship with full-text search" for details.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `text` | no declared type | The normalized text of one section. The table is declared CONTENTLESS (`content=''`), so this value cannot be read back at all: `SELECT text FROM bookContentSearch` returns `NULL`. The index answers "where does this word occur", not "what is the text there". |
+
+SQLite creates four shadow tables next to it — `bookContentSearch_data`,
+`bookContentSearch_idx`, `bookContentSearch_docsize`,
+`bookContentSearch_config`. These are FTS5 internals; they must not be read or
+written directly and should be skipped when enumerating the database's tables.
+
 ### Value formats
 
 Some decisions cannot be inferred from column types (SQLite stores dates,
@@ -5413,6 +5718,7 @@ anything else is rejected by the database engine itself:
 | `reading.purpose` | `newKnowledge`, `deeperDive`, `otherView`, `recommended`, `trending`, `motivation`, `fun`, `familiarAuthor`, `sleep`, `spiritual` — migration **v27**; the column is OPTIONAL and NULL passes (see caveat 1 below) |
 | `reading.depth` | `skimmed`, `scanned`, `read`, `studied` — migration **v27**; the column is OPTIONAL and NULL passes |
 | `annotation.intent` | `implement`, `remember` — migration **v28**; the column is OPTIONAL and NULL passes |
+| `annotation.style` | `solid`, `wavy` — migration **v50**; the column is OPTIONAL and NULL passes |
 | `annotation.processed` | `raw`, `sorted`, `used` — migration **v28**; the column is `NOT NULL` with the default `raw` |
 | `collection.kind` | `books`, `articles` — migration **v30**, the `articles` value added by **v37**; the column is `NOT NULL` with the default `books` |
 | `bookCollection.reason` | `reread`, `gratitude`, `milestone` — migration **v30**; the column is OPTIONAL and NULL passes (see caveat 1 below) |
@@ -5593,8 +5899,8 @@ lands in subproject 2, but the format is fixed already):
 ```
 
 **Ink** — `type` is `"ink"`: a zero-based page number and a list of strokes on
-it. A stroke is an object of pen width and points in drawing order; the
-coordinates are the same as for `rects` — PDF page coordinates.
+it. A stroke is an object of pen width, an optional colour and points in drawing
+order; the coordinates are the same as for `rects` — PDF page coordinates.
 
 ```json
 {
@@ -5603,11 +5909,31 @@ coordinates are the same as for `rects` — PDF page coordinates.
   "paths": [
     {
       "width": 2,
+      "color": "#1133ffcc",
       "points": [[10.5, 20.25], [11, 21, 0.62], [12, 22, 0.8, 1.05, 2.31]]
     }
   ]
 }
 ```
+
+**The colour belongs to the STROKE, not to the ink annotation** (format 1.15,
+migration `v51`). Before the bump the colour lived in a single
+`annotation.color` column for the whole page: a person drew in blue and red, saw
+two colours on the canvas, and on reopening the book both lines became the last
+one — they had nowhere to differ.
+
+- **`#rrggbb`, or `#rrggbbaa` with transparency.** Eight digits here and only
+  here: the `color` column has carried six from the very beginning, the panel,
+  the export and the exchange live by it, and it must not change.
+- **No field means no colour.** Strokes older than 1.15 have none, and the
+  format never writes `"color": null` — that would mean "the colour was
+  removed", not "there was no colour". Such a stroke is drawn in the row colour
+  (`annotation.color`).
+- **The `color` column stays** and means the colour of the ink annotation as a
+  whole — the colour of its last stroke. It is the one-word answer to "what
+  colour is this mark", which the panel and the export ask.
+- A reader of format 1.14 skips the new field — it is optional, and the ink is
+  shown in the row colour, as it used to be.
 
 **A point is an array of numbers, and its LENGTH says what is known about it:**
 
@@ -6746,6 +7072,31 @@ as if there were no own setting for this device at all.
 determines `uuid`), its value is `NULL`. The value does not resurrect on
 the next read.
 
+**Role of record is a shared setting** (format 1.16, migration
+`v52_role_of_record_shared`). Four keys answer a question about the library
+itself rather than about how one screen shows it, and therefore must live in
+shared rows (`deviceId = ''`):
+
+| Key | What it answers |
+|---|---|
+| `shelf.golden.<reason>.uuid`, `shelf.golden.<reason>.articles.uuid` | which collection serves as the Golden shelf for that reason — for books and for articles |
+| `shelf.<collection uuid>.limit` | how many places that shelf has (default 28, see `ShelfLimit`) |
+| `list.<collection uuid>.isReading` | this collection is a reading list (`"1"`) |
+| `lists.smart` | the rules of smart lists, all in one JSON |
+
+Before 1.16 all four were written as rows of a SINGLE device. Sync carries only
+shared rows out of `setting`, so the answers went nowhere: on the second device
+the Golden shelf was looked up by name again, a reading list looked like an
+ordinary collection, and smart lists did not exist at all. The migration moves
+what was already written: it takes the device row that HAS a value (a cleared
+row never masked the shared one anyway — a read falls through `NULL`), puts that
+value into the shared row and removes the device rows. With several device rows
+the freshest `modifiedAt` wins, ties broken by the smaller `deviceId`.
+
+**For a third-party writer of the format this reads as:** look for these keys
+among rows with `deviceId = ''`. A row with a non-empty `deviceId` on such a key
+is the trace of a file that has not yet been through migration `v52`.
+
 #### `book.readStatus`
 
 One of six values: `unread` (never opened), `inbox` (arrived from a transfer,
@@ -6925,11 +7276,23 @@ itself and merge state), `readingPosition`, `device`, `bookSearch` and its four
 shadow tables (`bookSearch_config`, `bookSearch_data`, `bookSearch_docsize`,
 `bookSearch_idx`), `annotationSearch` and its four (`annotationSearch_config`,
 `annotationSearch_data`, `annotationSearch_docsize`, `annotationSearch_idx`),
-`grdb_migrations`.
+the whole content index — `bookContent`, `bookContentSection`,
+`bookContentSearch` and its four shadow tables (`bookContentSearch_config`,
+`bookContentSearch_data`, `bookContentSearch_docsize`,
+`bookContentSearch_idx`) — and `grdb_migrations`.
 
-Both full-text indexes stay here for the same reason: they are derived. Not one
-of their rows holds anything absent from `book` and `annotation`, and on another
-device they rebuild themselves from the same books and excerpts.
+All three full-text indexes stay here for the same reason: they are derived. Not
+one row of `bookSearch` or `annotationSearch` holds anything absent from `book`
+and `annotation`, and on another device they rebuild themselves from the same
+books and excerpts.
+
+The content index (v48) is derived not from a column but from a FILE, which only
+makes that reasoning firmer: the files travel through their own exchange, and the
+receiver parses them locally by the same rule. It also could not travel by sheer
+size — 495 MB on the owner's library against 59 MB for the rest of the database.
+Hence a direct consequence for third-party readers: **meeting a file without
+these tables, or with an empty index, do not fail** — search by title and author
+as before, and the index will be built when hands reach it.
 
 **Why the reading position does not travel through the journal.** A journal row
 weighs about 390 bytes with the live index set; two fields per page turn is 780
@@ -7487,6 +7850,69 @@ morphology is ever needed it will arrive as a SECOND index over stems, not by
 swapping this one's tokenizer: a swapped tokenizer would make already-built
 indexes incompatible.
 
+**The third index — `bookContentSearch` (migration v48) — is built
+DIFFERENTLY.** The difference is not cosmetic, and third-party code needs to
+know it.
+
+**It is contentless.** `content=''` means the table stores not one character of
+text: `SELECT text FROM bookContentSearch` returns `NULL` for every row. The
+reason is size. Measured on 20260904 against the owner's library (1.7 GB of
+text: 1911 EPUB, 813 PDF, 118 FB2) by building real indexes: with the text
+stored the index weighs 2.2 GB, without it 495 MB — while the whole rest of the
+database is 59 MB. Storing the text would inflate the file thirty-sevenfold for
+the sake of a snippet an opened book gives anyway.
+
+**It is not kept in sync by triggers, because its source is not a column but a
+FILE on disk.** For `bookSearch` and `annotationSearch` the source lives in the
+same database, and three triggers are the only way to keep the index from
+drifting. Here neither the text nor the file ever enters the database: index
+rows are written by whoever holds the text. DELETION, on the other hand, does
+live in the schema: `bookContent` → cascade → `bookContentSection` → the
+`bookContentSection_search_on_delete` trigger.
+
+**It is assembled from three entities.** `bookContent` — "this file has been
+parsed, and here is how it ended"; `bookContentSection` — "and in which place of
+the file"; `bookContentSearch` — the index itself, whose `rowid` equals
+`bookContentSection.id`. A third-party query looks like this:
+
+```sql
+SELECT book.title, s.sectionIndex
+  FROM bookContentSearch f
+  JOIN bookContentSection s ON s.id = f.rowid
+  JOIN bookContent c ON c.id = s.contentId
+  JOIN bookFile bf ON bf.sha256 = c.fileSHA256 AND bf.deletedAt IS NULL
+  JOIN book ON book.id = bf.bookId
+ WHERE bookContentSearch MATCH 'перевал*'
+   AND book.deletedAt IS NULL AND book.mergedIntoUUID IS NULL;
+```
+
+**The normalization is the same** as for the two earlier indexes: both the text
+and the query go through case folding and "ё" → "е". A rule of its own for the
+third index would mean a query that finds a book by its title and fails to find
+the same book by its text.
+
+**`contentless_delete=1` is part of the table declaration, not decoration.**
+Without it a contentless FTS5 table refuses to delete a row at all (`cannot
+DELETE from contentless fts5 table`), meaning a book could never be removed from
+the index. The option requires SQLite 3.43 or newer.
+
+**`detail` is deliberately left full.** The threefold lighter `detail=none`
+(153 MB against 495) was rejected because with it a phrase query fails with an
+ERROR (`fts5: phrase queries are not supported (detail!=full)`), so does `NEAR`,
+and `bm25` returns the same zero for every row — there is no ranking at all.
+
+**The index may be absent, and that is a legitimate state of the file.** It is
+derived and does not travel to other devices: a library moved to another machine
+arrives with its files and without the index, and the index is rebuilt from the
+same bytes. A reader that meets a file without these three tables must not fail
+— it must search by title and author, as before.
+
+**The FTS5 rebuild command cannot be used.** `INSERT INTO
+bookContentSearch(bookContentSearch) VALUES('rebuild')` does not work on a
+contentless table: there is nothing to rebuild from, the content is not in the
+database. The only way to re-index is to parse the files again; in Beresta that
+is done by changing the number in `bookContent.rule`.
+
 ### Blob store garbage-collection roots
 
 Book files and covers are not stored in the database — only their SHA-256
@@ -7511,6 +7937,7 @@ pairs the collector must treat as roots. As of this writing:
 | `annotation` | `bookCoverSHA256` |
 | `reading` | `fileSHA256` |
 | `bookmark` | `fileSHA256` |
+| `bookContent` | `fileSHA256` |
 
 `annotation.fileSHA256` belongs on this list for a concrete reason: an
 annotation can be pinned to a specific book file version (useful when a book
@@ -7561,6 +7988,24 @@ bookmark does. The bookmark is held by W3C selectors and
 survives a file replacement, but while the file is there it IS the edition the
 place was found in, and a sweep that took it away would remove any chance to
 check the bookmark against the text it was placed against.
+
+`readingSession.fileSHA256` (migration v47) — the file a reading stretch ran
+over. Same argument as `reading.fileSHA256`: "which edition was I reading" is
+part of the reading record, and a fingerprint without content compares to
+nothing. There are an order of magnitude more rows than in `reading`, but
+exactly as many files are held — the same files of the same books. An empty
+value (pre-1.12 stretches) is legitimate and is no root. The pin is **not
+temporary**.
+
+`bookContent.fileSHA256` (migration v48) — the file whose text sits in the
+full-text index. An index row says "this file has been parsed, and here is which
+of its sections hold which words"; had the sweeper taken the bytes away, search
+would keep finding the book and leading into a file that is gone. This pin is
+**temporary**, and it does not hold by itself: the parse of a file no longer
+referenced by any live `bookFile` row must be swept
+(`BookContentRepository.sweepOrphans`). Without that sweep the root would pin
+EVERY file ever indexed forever, including long-replaced editions — which would
+be a leak rather than a protection.
 
 **Not every table added after this list joins it — and that is a decision in
 both directions.** Neither `readerDecision` (v25), nor `annotationLayer` (v28),

@@ -433,11 +433,11 @@ export class SyncRunner {
     }
     const safety = report.refusals.filter((one) => one.refused === "too-many-removals");
     if (safety.length > 0) {
-      this.ports.announce(`Beresta: ${safety[0]!.message}`);
+      this.ports.announce(`Beresta: ${safety[0].message}`);
     }
     const other = report.refusals.filter((one) => one.refused !== "too-many-removals");
     if (other.length > 0) {
-      this.ports.announce(`Beresta: ${other[0]!.message}`);
+      this.ports.announce(`Beresta: ${other[0].message}`);
     }
     if (report.missing.length > 0) {
       this.ports.announce(

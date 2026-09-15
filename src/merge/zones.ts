@@ -96,8 +96,8 @@ export function splitFile(text: string): FileZones {
         "записала: верните вторую строку маркера или уберите обе.",
     };
   }
-  const begin = begins[0]!;
-  const end = ends[0]!;
+  const begin = begins[0];
+  const end = ends[0];
   if (end < begin) {
     return {
       kind: "broken",
@@ -109,9 +109,9 @@ export function splitFile(text: string): FileZones {
   }
 
   const beforeLines = body.slice(0, begin);
-  const beginLine = body[begin]!;
+  const beginLine = body[begin];
   const innerLines = body.slice(begin + 1, end);
-  const endLine = body[end]!;
+  const endLine = body[end];
   const afterLines = body.slice(end + 1);
 
   return {
@@ -138,7 +138,7 @@ export function anchorsIn(lines: readonly string[]): Set<string> {
   const found = new Set<string>();
   for (const line of lines) {
     const match = ANCHOR_LINE.exec(line);
-    if (match !== null) found.add(match[1]!);
+    if (match !== null) found.add(match[1]);
   }
   return found;
 }

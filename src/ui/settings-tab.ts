@@ -57,7 +57,16 @@ import {
 
 /** Что странице нужно от плагина — и ничего больше. */
 export interface SettingsHost {
-  settings: BerestaSettings;
+  /**
+   * Настройки СЕЙЧАС, а не снимок времён загрузки плагина.
+   *
+   * ⚠️ Вопросом, а не полем (правка 20260915). Полем это выражалось геттером в
+   * объектном литерале, а тому нужен был псевдоним `const plugin = this` —
+   * проверка каталога назвала его «Unexpected aliasing of „this“». Метод тем
+   * же местом говорит правду: страница спрашивает настройки при каждом
+   * открытии, иначе поправленное значение возвращалось бы на прежнее.
+   */
+  settingsNow(): BerestaSettings;
   save(next: BerestaSettings): Promise<void>;
 }
 
@@ -94,8 +103,8 @@ export class BerestaSettingTab extends PluginSettingTab {
         "печатается в каждом блоке, поэтому сдвиг закреплён числом. Смените его — " +
         "и все блоки перерисуются один раз; блоки, которые вы правили руками, " +
         "останутся вашими.",
-      () => this.host.settings.timeZoneOffsetMinutes,
-      (value) => ({ ...this.host.settings, timeZoneOffsetMinutes: value }),
+      () => this.host.settingsNow().timeZoneOffsetMinutes,
+      (value) => ({ ...this.host.settingsNow(), timeZoneOffsetMinutes: value }),
     );
 
     this.folderField();
@@ -105,8 +114,8 @@ export class BerestaSettingTab extends PluginSettingTab {
       "Секунд между взглядами, когда окно Obsidian впереди. Без фокуса Beresta " +
         "смотрит раз в минуту. Взгляд стоит одного обращения к файлу: заметки " +
         "трогаются, только если выгрузка изменилась.",
-      () => Math.round(this.host.settings.focusedIntervalMs / 1000),
-      (value) => ({ ...this.host.settings, focusedIntervalMs: value * 1000 }),
+      () => Math.round(this.host.settingsNow().focusedIntervalMs / 1000),
+      (value) => ({ ...this.host.settingsNow(), focusedIntervalMs: value * 1000 }),
     );
 
     this.numberField(
@@ -115,8 +124,8 @@ export class BerestaSettingTab extends PluginSettingTab {
         "если текст изменился с прошлой копии. Держится столько последних версий, " +
         "сколько здесь стоит; всё, что старше, вытесняется. Копии лежат в папке " +
         "плагина и не попадают ни в поиск, ни в граф.",
-      () => this.host.settings.keepBackups,
-      (value) => ({ ...this.host.settings, keepBackups: value }),
+      () => this.host.settingsNow().keepBackups,
+      (value) => ({ ...this.host.settingsNow(), keepBackups: value }),
     );
 
     this.numberField(
@@ -124,8 +133,8 @@ export class BerestaSettingTab extends PluginSettingTab {
       "Если проход убирает больше этого числа блоков или больше пятой части — он " +
         "останавливается и показывает список. Так выглядит выгрузка, приехавшая " +
         "наполовину или с другой машины.",
-      () => this.host.settings.removalCount,
-      (value) => ({ ...this.host.settings, removalCount: value }),
+      () => this.host.settingsNow().removalCount,
+      (value) => ({ ...this.host.settingsNow(), removalCount: value }),
     );
 
     this.templateField();
@@ -158,22 +167,25 @@ export class BerestaSettingTab extends PluginSettingTab {
     const say = this.sayLine(setting);
 
     setting.addTextArea((area) => {
-      area.setValue(this.host.settings.template ?? "");
+      area.setValue(this.host.settingsNow().template ?? "");
       area.inputEl.rows = 12;
-      area.inputEl.style.width = "100%";
-      area.inputEl.style.fontFamily = "var(--font-monospace)";
+      // ⚠️ Вид — КЛАССОМ, а не присваиванием в `style` (замечание проверки
+      // каталога 20260915, правило `obsidianmd/no-static-styles-assignment`).
+      // Присвоенный стиль не переопределить темой и не отменить пользователю:
+      // он старше любого правила таблицы.
+      area.inputEl.addClass("beresta-template-area");
 
       const commit = async (): Promise<void> => {
         const verdict = readTemplateField(area.getValue());
         if (verdict.kind === "ok") {
           say(verdict.said, false);
-          if (verdict.value !== this.host.settings.template) {
-            await this.host.save({ ...this.host.settings, template: verdict.value });
+          if (verdict.value !== this.host.settingsNow().template) {
+            await this.host.save({ ...this.host.settingsNow(), template: verdict.value });
           }
         } else if (verdict.kind === "refused") {
           say(verdict.said, true);
         }
-        area.setValue(this.host.settings.template ?? "");
+        area.setValue(this.host.settingsNow().template ?? "");
       };
       this.pending.push(commit);
       area.inputEl.addEventListener("blur", () => void commit());
@@ -184,7 +196,7 @@ export class BerestaSettingTab extends PluginSettingTab {
         .setIcon("rotate-ccw")
         .setTooltip("Вернуть стандартный")
         .onClick(() => {
-          void this.host.save({ ...this.host.settings, template: undefined });
+          void this.host.save({ ...this.host.settingsNow(), template: undefined });
           this.display();
         });
     });
@@ -245,19 +257,19 @@ export class BerestaSettingTab extends PluginSettingTab {
     const say = this.sayLine(setting);
 
     setting.addText((text) => {
-      text.setValue(this.host.settings.libraryFolder);
+      text.setValue(this.host.settingsNow().libraryFolder);
 
       const commit = async (): Promise<void> => {
         const verdict = readFolderField(text.getValue(), (path) => this.folderExists(path));
         if (verdict.kind === "ok") {
           say(verdict.said, false);
-          if (verdict.value !== this.host.settings.libraryFolder) {
-            await this.host.save({ ...this.host.settings, libraryFolder: verdict.value });
+          if (verdict.value !== this.host.settingsNow().libraryFolder) {
+            await this.host.save({ ...this.host.settingsNow(), libraryFolder: verdict.value });
           }
         } else if (verdict.kind === "refused") {
           say(verdict.said, true);
         }
-        text.setValue(this.host.settings.libraryFolder);
+        text.setValue(this.host.settingsNow().libraryFolder);
       };
       this.pending.push(commit);
 

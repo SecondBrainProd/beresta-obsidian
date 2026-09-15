@@ -141,10 +141,10 @@ export class BindingModal extends Modal {
     // тега в интерфейсе не остаётся) и не отдаёт вид чужому классу. Вес шрифта
     // задан в `styles.css` там же, где перенос.
     box.createDiv({ text: row.title, cls: "beresta-binding-title" });
-    box.createEl("div", { text: bookSubtitle(row), cls: "beresta-muted" });
+    box.createDiv({ text: bookSubtitle(row), cls: "beresta-muted" });
 
     const said = nothingFoundWords(row);
-    if (said !== undefined) box.createEl("div", { text: said, cls: "beresta-muted" });
+    if (said !== undefined) box.createDiv({ text: said, cls: "beresta-muted" });
 
     const options = box.createDiv({ cls: "beresta-binding-options" });
     this.options.set(row.bookUUID, []);

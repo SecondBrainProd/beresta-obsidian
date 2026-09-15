@@ -52,7 +52,7 @@ export class ConflictsPanel extends ItemView {
     contentEl.addClass("beresta-conflicts");
     for (const line of describeBoard(this.source())) {
       if (line === "") contentEl.createEl("br");
-      else contentEl.createEl("div", { text: line });
+      else contentEl.createDiv({ text: line });
     }
   }
 }

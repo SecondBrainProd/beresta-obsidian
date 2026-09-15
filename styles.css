@@ -275,3 +275,12 @@ input.beresta-setting-invalid {
 .callout[data-callout="note"][data-callout-metadata~="beresta"] {
   --callout-color: var(--callout-quote, var(--callout-default));
 }
+
+/* Поле шаблона выписки в настройках: во всю ширину и моноширинным — шаблон
+   читается столбиком, и пропорциональный шрифт ломает выравнивание скобок.
+   Классом, а не присваиванием в `style`: присвоенное темой не переопределить
+   (правило каталога `obsidianmd/no-static-styles-assignment`). */
+.beresta-template-area {
+    width: 100%;
+    font-family: var(--font-monospace);
+}

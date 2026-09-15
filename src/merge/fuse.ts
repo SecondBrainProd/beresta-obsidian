@@ -183,7 +183,7 @@ export function splitInner(lines: readonly string[]): InnerSplit {
     return { head: trimBlank(lines), blocks: [], tail: [] };
   }
 
-  const first = anchors[0]!;
+  const first = anchors[0];
   let headEnd = -1;
   for (let index = 0; index < first; index += 1) {
     if (BLANK_LINE.test(lines[index] ?? "")) {
@@ -197,8 +197,15 @@ export function splitInner(lines: readonly string[]): InnerSplit {
   const blocks: Block[] = [];
   for (const at of anchors) {
     const body = trimBlank(lines.slice(start, at + 1));
-    const anchor = ANCHOR_LINE.exec(lines[at] ?? "")![1]!;
-    blocks.push({ anchor, lines: body });
+    // ⚠️ Здесь утверждение о не-null было ЗАСЛУЖЕННЫМ, в отличие от трёх
+    // десятков соседних, снятых по замечанию каталога 20260915: строки
+    // `anchors` отобраны тем же образцом, так что разбор не подведёт. Но
+    // «не подведёт» — рассуждение, а не проверка, и цена ошибки — блок без
+    // якоря, то есть выписка, потерявшая связь с местом в книге. Спрашиваем
+    // прямо.
+    const found = ANCHOR_LINE.exec(lines[at] ?? "");
+    if (found === null) continue;
+    blocks.push({ anchor: found[1], lines: body });
     start = at + 1;
   }
   return { head, blocks, tail: trimBlank(lines.slice(start)) };
@@ -256,8 +263,8 @@ function markOf(anchor: string, lines: readonly string[]): Marked {
     return { print: undefined, printLine: undefined, body: stripWarning(lines) };
   }
   return {
-    print: match[2]!,
-    printLine: lines[0]!,
+    print: match[2],
+    printLine: lines[0],
     body: stripWarning(trimBlank(lines.slice(1))),
   };
 }
@@ -370,7 +377,7 @@ export function fuse(input: FuseInput): FuseResult {
   const flushOrphansBefore = (limit: number): void => {
     for (; flushed < limit; flushed += 1) {
       if (done.has(flushed)) continue;
-      const block = previous.blocks[flushed]!;
+      const block = previous.blocks[flushed];
       if (renderedAnchors.has(block.anchor) && !paired.has(block.anchor)) continue;
       done.add(flushed);
       const marked = markOf(block.anchor, block.lines);
@@ -416,7 +423,7 @@ export function fuse(input: FuseInput): FuseResult {
     paired.add(next.anchor);
     if (!done.has(at)) {
       done.add(at);
-      fusePair(previous.blocks[at]!, next, known, nextBlocks, out, conflicts);
+      fusePair(previous.blocks[at], next, known, nextBlocks, out, conflicts);
     }
     if (at >= flushed) flushed = at + 1;
   }

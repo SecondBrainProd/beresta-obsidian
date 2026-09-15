@@ -203,7 +203,7 @@ function scalar(value: string): string {
 
 function unquote(value: string): string {
   if (value.length >= 2 && (value.startsWith('"') || value.startsWith("'"))) {
-    const quote = value[0]!;
+    const quote = value[0];
     if (value.endsWith(quote)) return value.slice(1, -1);
   }
   return value;

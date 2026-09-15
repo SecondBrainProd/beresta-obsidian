@@ -1,8 +1,9 @@
 {
   "id": "beresta",
   "name": "Beresta",
-  "version": "0.1.0",
-  "minAppVersion": "1.4.0",
+  "version": "0.1.1",
+  "minAppVersion": "1.7.2",
   "description": "Brings highlights and notes from the Beresta reader into your book notes as Markdown callouts, one managed section per book, leaving the text you wrote by hand untouched. Reads a snapshot file inside the vault and makes no network requests.",
-  "author": "Second Brain Production"
+  "author": "Second Brain Production",
+  "isDesktopOnly": false
 }

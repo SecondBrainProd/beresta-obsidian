@@ -88,12 +88,9 @@ export default class BerestaPlugin extends Plugin {
     // тот их снимок, что был при загрузке плагина: иначе поправленное значение
     // возвращается на прежнее при следующем открытии страницы, и человек
     // решает, что настройка не сохраняется.
-    const plugin = this;
     this.addSettingTab(
       new BerestaSettingTab(this.app, this, {
-        get settings(): BerestaSettings {
-          return plugin.runner.state.settings;
-        },
+        settingsNow: () => this.runner.state.settings,
         save: async (next) => {
           await this.saveSettings(next);
         },
@@ -518,7 +515,7 @@ export default class BerestaPlugin extends Plugin {
   }
 
   private bookIdsOf(file: TFile): string[] {
-    const raw = this.app.metadataCache.getFileCache(file)?.frontmatter?.[BOOK_ID_KEY];
+    const raw: unknown = this.app.metadataCache.getFileCache(file)?.frontmatter?.[BOOK_ID_KEY];
     if (typeof raw === "string") return raw.trim() === "" ? [] : [raw.trim()];
     if (!Array.isArray(raw)) return [];
     return raw

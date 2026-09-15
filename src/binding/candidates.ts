@@ -234,21 +234,21 @@ export function identify(note: VaultNote): NoteIdentity {
     const line = raw.trim();
 
     const heading = /^#{1,3}\s+(.+?)\s*$/.exec(line);
-    if (heading !== null && !isServiceHeading(heading[1]!)) titles.add(heading[1]!, "heading");
+    if (heading !== null && !isServiceHeading(heading[1])) titles.add(heading[1], "heading");
 
     // Шаблон книги владельца: `**Название**: …`, `**Автор**:  [[Кто-то]]`.
     const ownTitle = /^\*\*Название\*\*:\s*(.*)$/.exec(line);
-    if (ownTitle !== null && ownTitle[1]!.trim() !== "") titles.add(ownTitle[1]!.trim(), "declared");
+    if (ownTitle !== null && ownTitle[1].trim() !== "") titles.add(ownTitle[1].trim(), "declared");
     const ownAuthor = /^\*\*Автор\*\*:\s*(.*)$/.exec(line);
-    if (ownAuthor !== null) pushAuthors(authors, ownAuthor[1]!);
+    if (ownAuthor !== null) pushAuthors(authors, ownAuthor[1]);
 
     // Блок `### Metadata` Readwise.
     const fullTitle = /^-\s*Full Title:\s*(.*)$/.exec(line);
-    if (fullTitle !== null && fullTitle[1]!.trim() !== "") titles.add(fullTitle[1]!.trim(), "declared");
+    if (fullTitle !== null && fullTitle[1].trim() !== "") titles.add(fullTitle[1].trim(), "declared");
     const rwAuthor = /^-\s*Author:\s*(.*)$/.exec(line);
-    if (rwAuthor !== null) pushAuthors(authors, rwAuthor[1]!);
+    if (rwAuthor !== null) pushAuthors(authors, rwAuthor[1]);
     const category = /^-\s*Category:\s*#([\w-]+)\s*$/.exec(line);
-    if (category !== null) workKind = kindOfCategory(category[1]!);
+    if (category !== null) workKind = kindOfCategory(category[1]);
   }
 
   const machineMarks = marksOfForeignTool(note.text);
@@ -494,7 +494,7 @@ function yamlValues(block: readonly string[], key: string): string[] {
   for (let index = 1; index < block.length - 1; index += 1) {
     const match = new RegExp(`^${key}:(.*)$`).exec(block[index] ?? "");
     if (match === null) continue;
-    const inline = match[1]!.trim();
+    const inline = match[1].trim();
     if (inline.startsWith("[")) {
       for (const item of inline.replace(/^\[/, "").replace(/\]$/, "").split(",")) {
         const clean = unquote(item.trim());
@@ -517,7 +517,7 @@ function yamlValues(block: readonly string[], key: string): string[] {
 
 function unquote(value: string): string {
   if (value.length >= 2 && (value.startsWith('"') || value.startsWith("'"))) {
-    const quote = value[0]!;
+    const quote = value[0];
     if (value.endsWith(quote)) return value.slice(1, -1);
   }
   return value;
@@ -532,7 +532,7 @@ function unquote(value: string): string {
  * имя, и через показываемое.
  */
 function pushAuthors(into: string[], raw: string): void {
-  const links = [...raw.matchAll(/\[\[([^\]]+)\]\]/g)].map((match) => match[1]!);
+  const links = [...raw.matchAll(/\[\[([^\]]+)\]\]/g)].map((match) => match[1]);
   const parts = links.length > 0 ? links : [raw];
   for (const part of parts) {
     for (const side of part.split("|")) {
@@ -568,11 +568,11 @@ function sameAuthor(one: string, two: string): boolean {
   const bt = b.map(latin);
   if (at.join(" ") === bt.join(" ")) return true;
 
-  const surnameA = at[at.length - 1]!;
-  const surnameB = bt[bt.length - 1]!;
+  const surnameA = at[at.length - 1];
+  const surnameB = bt[bt.length - 1];
   if (surnameA !== surnameB || surnameA.length < 3) return false;
   if (at.length < 2 || bt.length < 2) return false;
-  return at[0]![0] === bt[0]![0];
+  return at[0][0] === bt[0][0];
 }
 
 const CYRILLIC: Record<string, string> = {

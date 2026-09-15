@@ -123,13 +123,13 @@ function parse(template: string): Node[] {
             "куски должны закрываться в том же порядке, в каком открыты",
         );
       }
-      current = stack.length === 0 ? root : stack[stack.length - 1]!.body;
+      current = stack.length === 0 ? root : stack[stack.length - 1].body;
     }
   }
 
   if (stack.length > 0) {
     throw new TemplateError(
-      `в шаблоне не закрыт кусок «{{#${stack[stack.length - 1]!.name}}}»`,
+      `в шаблоне не закрыт кусок «{{#${stack[stack.length - 1].name}}}»`,
     );
   }
   return root;
@@ -142,8 +142,8 @@ function tokenize(template: string): Token[] {
   let match = TAG.exec(template);
   while (match !== null) {
     if (match.index > at) push(template.slice(at, match.index));
-    const sigil = match[1]!;
-    const name = match[2]!;
+    const sigil = match[1];
+    const name = match[2];
     tokens.push(
       sigil === "#"
         ? { kind: "open", name }

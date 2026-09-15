@@ -32,8 +32,15 @@ describe("манифест проходит требования каталог�
     expect(manifest.description.startsWith("This is a plugin")).toBe(false);
   });
 
-  test("плагин не объявляет себя настольным: сети и Node в нём нет", () => {
-    expect((manifest as Record<string, unknown>).isDesktopOnly).toBeUndefined();
+  // ⚠️ **Поле теперь ОБЪЯВЛЕНО явным `false`, а не опущено** (проверка каталога
+  // 20260915: «Manifest is missing an optional but recommended field»).
+  // Прежде эта проверка требовала его отсутствия — молчание читалось как
+  // «плагин не настольный», и это было верно по смыслу, но каталог видит в нём
+  // недосмотр, а не решение. Смысл не изменился: сети и Node в плагине нет,
+  // снимок читается через `vault.adapter`, и на телефоне Beresta пишет его
+  // сама.
+  test("плагин объявлен не настольным: сети и Node в нём нет", () => {
+    expect((manifest as Record<string, unknown>).isDesktopOnly).toBe(false);
   });
 
   // Действующее правило (проверено 20260816) запрещает «obsidian» только в
@@ -60,14 +67,21 @@ describe("манифест проходит требования каталог�
     }
   });
 
-  // `vault.process` появился в 1.4.0, а на нём стоит вся запись в заметки:
-  // без него плагин пишет поверх открытого файла и теряет правки человека.
-  // Планка ниже 1.4.0 — обещание работать там, где работать нечем.
-  test("minAppVersion не ниже 1.4.0 — планку задаёт vault.process", () => {
-    const [major, minor] = manifest.minAppVersion.split(".").map(Number);
+  // ⚠️ **Планка поднята до 1.7.2 проверкой каталога 20260915.** Заявку
+  // завернули с ошибкой `obsidianmd/no-unsupported-api`: `revealLeaf`
+  // (`main.ts`, показ панели столкновений) объявлен в `obsidian.d.ts` как
+  // `@since 1.7.2`, а манифест обещал работу с 1.4.0. Обещание работать там,
+  // где работать нечем, — ровно то, что правило и ловит.
+  //
+  // Прежнее обоснование планки — `vault.process` — при этом оказалось
+  // неточным: сегодняшний `obsidian.d.ts` помечает его `@since 1.1.0`, а не
+  // 1.4.0. Запись держится на нём по-прежнему, но планку задаёт не он.
+  test("minAppVersion не ниже 1.7.2 — планку задаёт revealLeaf", () => {
+    const [major, minor, patch] = manifest.minAppVersion.split(".").map(Number);
     expect(major).toBeGreaterThanOrEqual(1);
-    expect(major > 1 || minor >= 4).toBe(true);
+    expect(major > 1 || minor > 7 || (minor === 7 && patch >= 2)).toBe(true);
   });
+
 
   test("версия плагина указана в versions.json с той же планкой", () => {
     const table = versions as Record<string, string>;

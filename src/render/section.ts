@@ -139,7 +139,7 @@ export function wrapSection(bodies: readonly string[]): string {
     );
   }
 
-  const anchors = [...section.matchAll(/^\^(\S+)$/gm)].map((match) => match[1]!);
+  const anchors = [...section.matchAll(/^\^(\S+)$/gm)].map((match) => match[1]);
   if (new Set(anchors).size !== anchors.length) {
     throw new TemplateError(
       "в отрисованной секции два блока получили один якорь. Такой блок в заметке " +

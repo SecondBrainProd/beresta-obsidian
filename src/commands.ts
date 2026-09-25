@@ -16,8 +16,13 @@
  *
  * **Ни одного обращения к Obsidian.** Здесь только список: имя, признак «нужна
  * открытая заметка» и что позвать. Регистрация живёт в точке входа, а `id` и
- * слова проверяются обычным тестом.
+ * слова проверяются обычным тестом. Имена — по языку интерфейса, из словаря
+ * панелей (`ui/words.ts`); `id` от языка не зависит: он в горячих клавишах.
  */
+
+
+import { interfaceLanguage } from "./render/defaults";
+import { panelWords, type PanelWords } from "./ui/words";
 
 /** Что умеет плагин по просьбе человека. */
 export interface CommandActions {
@@ -51,41 +56,34 @@ export interface CommandSpec {
   readonly run: (path: string) => Promise<void> | void;
 }
 
-export function commandSpecs(actions: CommandActions): CommandSpec[] {
+export function commandSpecs(
+  actions: CommandActions,
+  words: PanelWords["commands"] = panelWords(interfaceLanguage()).commands,
+): CommandSpec[] {
   return [
-    {
-      id: "sync-now",
-      name: "Разложить выписки сейчас",
-      needsNote: false,
-      run: () => actions.syncNow(),
-    },
-    {
-      id: "bind-books",
-      name: "Привязать книги к заметкам",
-      needsNote: false,
-      run: () => actions.bindBooks(),
-    },
+    { id: "sync-now", name: words.syncNow, needsNote: false, run: () => actions.syncNow() },
+    { id: "bind-books", name: words.bindBooks, needsNote: false, run: () => actions.bindBooks() },
     {
       id: "show-conflicts",
-      name: "Показать расхождения",
+      name: words.showConflicts,
       needsNote: false,
       run: () => actions.showConflicts(),
     },
     {
       id: "return-section",
-      name: "Вернуть секцию Beresta в эту заметку",
+      name: words.returnSection,
       needsNote: true,
       run: (path) => actions.returnSection(path),
     },
     {
       id: "confirm-removals",
-      name: "Подтвердить удаление блоков в этой заметке",
+      name: words.confirmRemovals,
       needsNote: true,
       run: (path) => actions.confirmRemovals(path),
     },
     {
       id: "restore-version",
-      name: "Восстановить прежнюю версию этой заметки",
+      name: words.restoreVersion,
       needsNote: true,
       run: (path) => actions.restoreVersion(path),
     },

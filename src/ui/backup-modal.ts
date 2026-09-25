@@ -13,6 +13,8 @@
 import { Modal, type App } from "obsidian";
 
 import type { BackupRecord } from "../write/backup";
+import { interfaceLanguage } from "../render/defaults";
+import { counted, fill, panelWords, type PanelWords } from "./words";
 
 export class BackupModal extends Modal {
   constructor(
@@ -24,35 +26,36 @@ export class BackupModal extends Modal {
     super(app);
   }
 
+  /** Слова окна — по языку интерфейса в момент показа. */
+  private get words(): PanelWords {
+    return panelWords(interfaceLanguage());
+  }
+
   override onOpen(): void {
     const { contentEl, titleEl } = this;
-    titleEl.setText("Прежние версии заметки");
+    titleEl.setText(this.words.pass.backupTitle);
     contentEl.empty();
     contentEl.createEl("p", { text: this.path });
 
     if (this.records.length === 0) {
       contentEl.createEl("p", {
-        text:
-          "Копий этой заметки нет. Beresta снимает копию перед каждой своей записью " +
-          "в заметку; если она сюда ещё не писала, копировать было нечего.",
+        text: this.words.pass.backupNone,
       });
       return;
     }
 
     contentEl.createEl("p", {
       cls: "beresta-muted",
-      text:
-        "Копия снимается перед каждой записью Beresta, если текст с прошлой копии " +
-        "изменился; держатся последние несколько версий, число — в настройках. " +
-        "Возврат перепишет заметку целиком — вместе с тем, что вы написали после " +
-        "этого момента.",
+      text: this.words.pass.backupExplained,
     });
 
     // От новых к старым: нужная версия почти всегда последняя.
     for (const record of [...this.records].reverse()) {
       const line = contentEl.createDiv({ cls: "beresta-binding-choice" });
       const button = line.createEl("button", {
-        text: `${record.savedAt} — ${record.length} знаков`,
+        text: fill(counted(this.words, record.length, this.words.pass.backupRecord), {
+          savedAt: record.savedAt,
+        }),
       });
       button.addEventListener("click", () => {
         this.restore(record.id);

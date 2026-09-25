@@ -3,7 +3,16 @@ import { describe, expect, test } from "vitest";
 import { readBookIds, splitFrontmatter } from "../src/merge/frontmatter";
 import { merge, type KnownSection, type MergeResult } from "../src/merge/merge";
 import { splitFile } from "../src/merge/zones";
-import { SECTION_BEGIN, SECTION_END, anchorFor, renderBookBody, renderSection, wrapSection } from "../src/render/section";
+import { defaultTemplate } from "../src/render/defaults";
+import {
+  SECTION_BEGIN,
+  SECTION_END,
+  anchorFor,
+  renderBookBody,
+  renderSection,
+  thoughtAnchorFor,
+  wrapSection,
+} from "../src/render/section";
 import type { SnapshotAnnotation, SnapshotBook } from "../src/snapshot/model";
 
 /**
@@ -40,6 +49,7 @@ const BOOK: SnapshotBook = {
   title: "Джедайские техники",
   authors: ["Максим Дорофеев"],
   source: undefined,
+  ownThought: undefined,
   shard: "9504E37E-2CE3-5AD4-81F9-35414188FAC9.jsonld",
   total: 0,
   removedTotal: 0,
@@ -97,6 +107,11 @@ function anchor(item: SnapshotAnnotation): string {
 
 function render(items: readonly SnapshotAnnotation[]): string {
   return renderSection(BOOK, items, undefined, OFFSET);
+}
+
+/** Та же книга, но с мыслью человека о ней (формат базы 1.17). */
+function renderWithThought(items: readonly SnapshotAnnotation[], thought: string): string {
+  return renderSection({ ...BOOK, ownThought: thought }, items, undefined, OFFSET);
 }
 
 /**
@@ -231,6 +246,13 @@ describe("слияние", () => {
     expect(conflicts[0]!.anchor).toBe(anchor(B));
     expect(conflicts[0]!.kind).toBe("edited");
     expect(changed).toBe(false);
+
+    // Слова расхождения — по языку слияния (партия 5 долга 0.3в): без языка в
+    // проверках они английские, с «ru» — русские. Уберите `say` из `fusePair`
+    // в пользу русской строки — второе ожидание останется, первое покраснеет.
+    expect(conflicts[0]!.message).not.toMatch(/[А-Яа-яЁё]/);
+    const russian = merge(edited, render([A, B, C]), previous.known, { language: "ru" });
+    expect(russian.conflicts[0]!.message).toMatch(/[А-Яа-яЁё]/);
   });
 
   // Вырежьте сохранение зоны человека — тест обязан упасть.
@@ -533,12 +555,16 @@ describe("слияние", () => {
 
   test("заголовок секции, переписанный человеком, переживает проход", () => {
     const previous = firstPass([A, B]);
-    const renamed = previous.text.replace("## Выписки из Beresta", "## Цитаты (мои пометки ниже)");
+    // ⚠️ Заголовок берётся У ШАБЛОНА, а не литералом: с 20260925 он зависит от
+    // языка интерфейса (долг 0.3а), и литерал сделал бы проверку зелёной только
+    // при русском умолчании. В узле языка нет вовсе — умолчание английское.
+    const heading = defaultTemplate().split("\n")[0];
+    const renamed = previous.text.replace(heading, "## Цитаты (мои пометки ниже)");
 
     const result = merge(renamed, render([A, B, C]), previous.known);
 
     expect(result.text).toContain("## Цитаты (мои пометки ниже)");
-    expect(result.text).not.toContain("## Выписки из Beresta");
+    expect(result.text).not.toContain(heading);
     expect(result.conflicts.map((item) => item.kind)).toEqual(["head"]);
     expect(result.text).toContain(anchor(C));
   });
@@ -660,6 +686,45 @@ function count(text: string, needle: string): number {
  * единственное, чего вся эта машинерия и не должна делать.
  */
 describe("владение блоками: отпечаток живёт в заметке", () => {
+  // ⚠️ **Мысль о книге — блок С ЯКОРЕМ, и это не украшение.**
+  //
+  // Владелец 20260923 просил ровно этого: «улетает в заметку в Obsidian и ТАМ
+  // ДОРАБАТЫВАЕТСЯ». Единица владения при слиянии — блок с якорем: текст без
+  // якоря в зону машины попадает, но хозяина не имеет и перерисовывается каждым
+  // проходом. То есть без якоря доработка человека затиралась бы МОЛЧА.
+  //
+  // Вырежьте `"^{{thoughtAnchor}}"` из `DEFAULT_TEMPLATE` — оба теста ниже
+  // обязаны упасть.
+  test("мысль о книге получает свой якорь и свой отпечаток", () => {
+    const previous = merge(OWNER_NOTE, renderWithThought([A], "Моя мысль о книге"), NOTHING_KNOWN, {
+      mayCreateSection: true,
+    });
+
+    const thoughtAnchor = thoughtAnchorFor(BOOK);
+    expect(previous.text).toContain(`^${thoughtAnchor}`);
+    const prints = printsIn(previous.text);
+    expect(Object.keys(prints).sort()).toEqual([anchor(A), thoughtAnchor].sort());
+  });
+
+  test("доработка мысли в заметке ЗАМЕРЗАЕТ, а не затирается", () => {
+    const previous = merge(OWNER_NOTE, renderWithThought([A], "Моя мысль о книге"), NOTHING_KNOWN, {
+      mayCreateSection: true,
+    });
+    const edited = withBlockEdited(
+      previous.text,
+      thoughtAnchorFor(BOOK),
+      "И ещё: герой меняется только в третьей части.",
+    );
+
+    // Приложение своей мысли с тех пор не меняло — и всё равно НЕ ПЕРЕПИСЫВАЕТ.
+    const result = merge(edited, renderWithThought([A], "Моя мысль о книге"), NOTHING_KNOWN);
+
+    expect(result.conflicts.map((one) => one.kind)).toEqual(["edited"]);
+    expect(result.text).toContain("герой меняется только в третьей части");
+    expect(result.text).toBe(edited);
+    expect(result.changed).toBe(false);
+  });
+
   // Вырежьте служебную строку из записи — тест обязан упасть.
   test("у каждого блока в заметке свой отпечаток", () => {
     const previous = firstPass([A, B, C]);
@@ -725,6 +790,35 @@ describe("владение блоками: отпечаток живёт в за
    * (приёмочный шов 4) перестало бы быть верным по устройству, и чужая
    * синхронизация хранилища будилась бы вечно.
    */
+  /**
+   * Секция на диске кончается пустой строкой — иначе последний якорь виден.
+   *
+   * ⚠️ **Замер на живом Obsidian 20260925, демо-стенд.** Секция кончается
+   * якорем `^hl-…`; прилипнув к закрывающему маркеру, он становится с ним одним
+   * абзацем, а якорь считается якорем только стоя в абзаце один. Человек видел
+   * под последней цитатой мусорную строку из тридцати пяти знаков — в каждой
+   * заметке, где есть секция. Видимых якорей было 1; со вставленной пустой
+   * строкой — 0.
+   *
+   * ⚠️ **Проверка стоит рядом с «три прохода не меняют ни байта» нарочно.**
+   * Пустая строка обязана ставиться ВНУТРИ середины (`assembleInner`), а не при
+   * сборке файла: допиши её мимо сравнения прежней середины с новой — и заметка
+   * переписывалась бы каждый проход, а `beresta-last-sync` прыгал бы на ровном
+   * месте. Соседняя проверка ровно это и ловит.
+   *
+   * РЕЗ: уберите `lines.push("")` в конце `assembleInner` (`merge/fuse.ts`) —
+   * краснеет эта проверка. Второе место того же правила — `wrapSection`, у него
+   * свой рез в `render.test.ts`.
+   */
+  test("секция на диске кончается пустой строкой перед маркером", () => {
+    const result = firstPass([A, B, C]);
+    const rows = result.text.split("\n");
+    const end = rows.indexOf("%% beresta:end %%");
+    expect(end).toBeGreaterThan(1);
+    expect(rows[end - 1]).toBe("");
+    expect(rows[end - 2]).toMatch(/^\^hl-/);
+  });
+
   test("три прохода подряд с пустой памятью не меняют ни байта", () => {
     const first = firstPass([A, B, C]);
 

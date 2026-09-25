@@ -30,6 +30,8 @@
 
 import type { KnownSection } from "./merge/fuse";
 import { EMPTY_WATCH_MEMORY, type WatchMemory } from "./poller";
+import { interfaceLanguage } from "./render/defaults";
+import { fill, panelWords, type SettingsWords } from "./ui/words";
 
 /** Здоровье снимка — то, что показывает строка состояния. */
 export type SnapshotHealth = "неизвестно" | "нет" | "целый" | "наполовину" | "не-читается";
@@ -120,8 +122,14 @@ export interface PluginState {
   readonly unknown: Readonly<Record<string, unknown>>;
 }
 
+/**
+ * Умолчания для незнакомого языка интерфейса — английские, как и слова. Папка
+ * для русского интерфейса — в словаре (`defaultLibraryFolder`), её подставляет
+ * `initialState` по языку при первом запуске; записанное в `data.json` не
+ * трогается (решение владельца 20260925, вопрос 10.1).
+ */
 export const DEFAULT_SETTINGS: Omit<BerestaSettings, "timeZoneOffsetMinutes"> = {
-  libraryFolder: "Base/Библиотека",
+  libraryFolder: "Library",
   focusedIntervalMs: 5_000,
   unfocusedIntervalMs: 60_000,
   keepBackups: 5,
@@ -129,10 +137,20 @@ export const DEFAULT_SETTINGS: Omit<BerestaSettings, "timeZoneOffsetMinutes"> = 
   removalCount: 20,
 };
 
-/** Начальное состояние: сдвиг пояса берётся у машины ровно здесь и один раз. */
-export function initialState(timeZoneOffsetMinutes: number): PluginState {
+/**
+ * Начальное состояние: сдвиг пояса берётся у машины ровно здесь и один раз, папка
+ * для новых заметок — по языку интерфейса, тоже один раз.
+ */
+export function initialState(
+  timeZoneOffsetMinutes: number,
+  language: string = interfaceLanguage(),
+): PluginState {
   return {
-    settings: { ...DEFAULT_SETTINGS, timeZoneOffsetMinutes },
+    settings: {
+      ...DEFAULT_SETTINGS,
+      timeZoneOffsetMinutes,
+      libraryFolder: panelWords(language).settings.defaultLibraryFolder,
+    },
     watch: EMPTY_WATCH_MEMORY,
     known: {},
     sections: {},
@@ -152,8 +170,12 @@ export function initialState(timeZoneOffsetMinutes: number): PluginState {
  * записанный однажды, он живёт своей жизнью и не сдвигается ни от перелёта, ни
  * от того, что хранилище открыли на второй машине.
  */
-export function readState(raw: unknown, machineOffsetMinutes: number): PluginState {
-  const start = initialState(machineOffsetMinutes);
+export function readState(
+  raw: unknown,
+  machineOffsetMinutes: number,
+  language: string = interfaceLanguage(),
+): PluginState {
+  const start = initialState(machineOffsetMinutes, language);
   const document = asObject(raw);
   if (document === undefined) return start;
 
@@ -340,16 +362,15 @@ export type FieldVerdict =
   | { readonly kind: "typing" }
   | { readonly kind: "refused"; readonly said: string };
 
-/** Числовое поле страницы настроек: границы и слова, которыми оно отказывает. */
+/**
+ * Числовое поле страницы настроек: границы. Слова — имя, единица, примеры,
+ * пояснение — живут в словаре панелей (`ui/words.ts`) под ключом поля, по
+ * языку интерфейса; отказ поля собирается из них же.
+ */
 export interface NumberField {
-  /** Как поле названо на странице — этим же именем оно и отказывает. */
-  readonly name: string;
+  readonly key: keyof SettingsWords["fields"];
   readonly least: number;
   readonly most: number;
-  /** Единица в родительном множественном: «минут», «секунд», «версий». */
-  readonly units: string;
-  /** Что здесь бывает — примером, а не описанием. */
-  readonly examples: string;
 }
 
 /**
@@ -359,37 +380,10 @@ export interface NumberField {
  * приняла, а разбор файла выбросил, — и человек увидит, как настройка
  * «сама вернулась» после перезапуска.
  */
-export const OFFSET_FIELD: NumberField = {
-  name: "Часовой пояс выписок",
-  least: -14 * 60,
-  most: 14 * 60,
-  units: "минут",
-  examples: "300 — Караганда, 180 — Москва, 0 — Гринвич",
-};
-
-export const INTERVAL_FIELD: NumberField = {
-  name: "Как часто смотреть на выгрузку",
-  least: 1,
-  most: 3_600,
-  units: "секунд",
-  examples: "5 — как сейчас, 60 — раз в минуту",
-};
-
-export const KEEP_BACKUPS_FIELD: NumberField = {
-  name: "Сколько версий заметки хранить",
-  least: 1,
-  most: 100,
-  units: "версий",
-  examples: "5 — как сейчас",
-};
-
-export const REMOVAL_COUNT_FIELD: NumberField = {
-  name: "Предохранитель: сколько блоков можно убрать за проход",
-  least: 1,
-  most: 100_000,
-  units: "блоков",
-  examples: "20 — как сейчас",
-};
+export const OFFSET_FIELD: NumberField = { key: "offset", least: -14 * 60, most: 14 * 60 };
+export const INTERVAL_FIELD: NumberField = { key: "interval", least: 1, most: 3_600 };
+export const KEEP_BACKUPS_FIELD: NumberField = { key: "keepBackups", least: 1, most: 100 };
+export const REMOVAL_COUNT_FIELD: NumberField = { key: "removalCount", least: 1, most: 100_000 };
 
 /**
  * Разбирает напечатанное в числовом поле.
@@ -399,28 +393,31 @@ export const REMOVAL_COUNT_FIELD: NumberField = {
  * бесполезно: «неверное значение» не отвечает на единственный вопрос, который
  * у человека есть, — что теперь лежит в настройке.
  */
-export function readNumberField(field: NumberField, typed: string): FieldVerdict {
+export function readNumberField(
+  field: NumberField,
+  typed: string,
+  words: SettingsWords = panelWords(interfaceLanguage()).settings,
+): FieldVerdict {
   const text = typed.trim();
-  // Пусто или один знак — человек ещё печатает, а не ошибся.
   if (text === "" || text === "-" || text === "+") return { kind: "typing" };
-
+  const said = words.fields[field.key];
   const value = Number(text);
   if (!Number.isFinite(value)) {
     return {
       kind: "refused",
-      said:
-        `«${typed}» — это не число, настройка осталась прежней. ` +
-        `Здесь нужны ${field.units}: ${field.examples}.`,
+      said: fill(words.notANumber, { typed, units: said.units, examples: said.examples }),
     };
   }
-
   const whole = Math.round(value);
   if (whole < field.least || whole > field.most) {
     return {
       kind: "refused",
-      said:
-        `${whole} — вне границ поля (от ${field.least} до ${field.most}), ` +
-        `настройка осталась прежней. ${field.examples}.`,
+      said: fill(words.outOfRange, {
+        whole,
+        least: field.least,
+        most: field.most,
+        examples: said.examples,
+      }),
     };
   }
   return { kind: "ok", value: whole };
@@ -454,21 +451,15 @@ export type TemplateVerdict =
  * остаются подстановщику: он говорит о них подробнее, чем смогли бы мы, и
  * называет доступные значения поимённо.
  */
-export function readTemplateField(typed: string): TemplateVerdict {
+export function readTemplateField(
+  typed: string,
+  words: SettingsWords = panelWords(interfaceLanguage()).settings,
+): TemplateVerdict {
   if (typed.trim() === "") {
-    return {
-      kind: "ok",
-      value: undefined,
-      said: "Пусто — значит как у всех: стандартный шаблон.",
-    };
+    return { kind: "ok", value: undefined, said: words.templateEmpty };
   }
   if (!typed.includes("{{anchor}}")) {
-    return {
-      kind: "refused",
-      said:
-        "В шаблоне нет {{anchor}} — без него блок нечем связать с выпиской, и " +
-        "следующий проход посчитает все прежние блоки убранными. Шаблон не сохранён.",
-    };
+    return { kind: "refused", said: words.templateNoAnchor };
   }
   return { kind: "ok", value: typed };
 }
@@ -485,24 +476,19 @@ export function readTemplateField(typed: string): TemplateVerdict {
  *
  * Отказ здесь один и настоящий: имя, которого файловая система не примет.
  */
-export function readFolderField(typed: string, folderExists: (path: string) => boolean): FolderVerdict {
+export function readFolderField(
+  typed: string,
+  folderExists: (path: string) => boolean,
+  words: SettingsWords = panelWords(interfaceLanguage()).settings,
+): FolderVerdict {
   const text = typed.trim().replace(/^\/+/, "").replace(/\/+$/, "");
   if (text === "") return { kind: "typing" };
-
   const bad = /[\\:*?"<>|]/.exec(text);
   if (bad !== null) {
-    return {
-      kind: "refused",
-      said: `Знак «${bad[0]}» в имени папки Obsidian не примет — настройка осталась прежней.`,
-    };
+    return { kind: "refused", said: fill(words.badFolderChar, { char: bad[0] }) };
   }
-
   if (!folderExists(text)) {
-    return {
-      kind: "ok",
-      value: text,
-      said: `Папки «${text}» в хранилище нет — Beresta заведёт её, когда вы впервые скажете «создать новую заметку».`,
-    };
+    return { kind: "ok", value: text, said: fill(words.folderMissing, { folder: text }) };
   }
   return { kind: "ok", value: text };
 }

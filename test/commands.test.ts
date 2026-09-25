@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import { commandSpecs, type CommandActions } from "../src/commands";
+import { panelWords } from "../src/ui/words";
 
 /**
  * Команды — договор о том, что плагин делает сам, а что только по просьбе.
@@ -76,12 +77,24 @@ describe("команды", () => {
     }
   });
 
-  test("имена не повторяются и объясняют себя глаголом", () => {
-    const specs = commandSpecs(spy().actions);
-    const names = specs.map((one) => one.name);
-    expect(new Set(names).size).toBe(names.length);
-    for (const name of names) {
-      expect(name, name).toMatch(/^(Разложить|Привязать|Показать|Вернуть|Подтвердить|Восстановить)/);
+  test("имена не повторяются и объясняют себя глаголом — на обоих языках", () => {
+    const verbs = {
+      ru: /^(Разложить|Привязать|Показать|Вернуть|Подтвердить|Восстановить)/,
+      en: /^(Lay out|Bind|Show|Return|Confirm|Restore)/,
+    };
+    for (const [language, verb] of Object.entries(verbs)) {
+      const specs = commandSpecs(spy().actions, panelWords(language).commands);
+      const names = specs.map((one) => one.name);
+      expect(new Set(names).size, language).toBe(names.length);
+      for (const name of names) expect(name, `${language}: ${name}`).toMatch(verb);
+    }
+  });
+
+  test("без слов — английские: язык интерфейса в проверках неизвестен", () => {
+    // `interfaceLanguage()` без `localStorage` отвечает «en» — то же правило,
+    // что у слов заметки: незнакомому читателю русское не показывают.
+    for (const spec of commandSpecs(spy().actions)) {
+      expect(spec.name, spec.id).not.toMatch(/[А-Яа-яЁё]/);
     }
   });
 

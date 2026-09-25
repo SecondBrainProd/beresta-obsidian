@@ -18,6 +18,7 @@ import {
   wrapSection,
 } from "../src/render/section";
 import { TemplateError, renderTemplate } from "../src/render/template";
+import { panelWords } from "../src/ui/words";
 import { readSnapshot, type Snapshot, type SnapshotAnnotation, type SnapshotBook, type SnapshotSource } from "../src/snapshot";
 import { stampOf } from "../src/status";
 import { writeVerdict } from "../src/write/gate";
@@ -42,8 +43,18 @@ import { writeVerdict } from "../src/write/gate";
 
 const FIXTURES = fileURLToPath(new URL("fixtures", import.meta.url));
 
-/** Сдвиг владельца, UTC+5 (Караганда) — чтобы даты в проверках были постоянны. */
-const OFFSET = { timeZoneOffsetMinutes: 300 };
+/**
+ * Сдвиг владельца, UTC+5 (Караганда) — чтобы даты в проверках были постоянны.
+ *
+ * ⚠️ **Язык назван здесь явно, и это не формальность.** Слова, которые едут в
+ * заметку («Росчерк», «Подчёркнуто», «стр.», «Мысль.»), с 20260925 зависят от
+ * языка интерфейса Obsidian (`render/words.ts`), а в узле настроек Obsidian нет
+ * — то есть умолчание там английское. Не назови язык, и проверки ниже сверяли
+ * бы русские слова с английской отрисовкой: восемь красных, все ложные.
+ */
+const OFFSET = { timeZoneOffsetMinutes: 300, language: "ru" };
+/** Слова ошибок шаблона проверяются русскими — их писал владелец. */
+const RU_PASS = panelWords("ru").pass;
 
 function annotation(overrides: Partial<SnapshotAnnotation> = {}): SnapshotAnnotation {
   return {
@@ -81,6 +92,7 @@ function book(overrides: Partial<SnapshotBook> = {}): SnapshotBook {
     title: "Джедайские техники",
     authors: ["Максим Дорофеев"],
     source: undefined,
+    ownThought: undefined,
     shard: "9504E37E-2CE3-5AD4-81F9-35414188FAC9.jsonld",
     total: 1,
     removedTotal: 0,
@@ -114,6 +126,47 @@ function anchors(section: string): string[] {
 }
 
 describe("отрисовка секции", () => {
+  // ⚠️ Мысль о книге — формат базы 1.17, постановка
+  // `docs/plans/20260923-мысль-о-книге-постановка.md`. Появилась по первому
+  // отзыву беты: человек читает на iPhone, а хранилище держит на Windows, и
+  // мысль о книге ему записать негде.
+  //
+  // Вырежьте `thought: book.ownThought ?? ""` в `section.ts` — оба теста ниже
+  // обязаны упасть.
+  test("мысль о книге рисуется под заголовком секции, ДО цитат", () => {
+    const out = renderSection(
+      book({ ownThought: "Книга про то, что шаг должен быть меньше страха" }),
+      [annotation()],
+      DEFAULT_TEMPLATE,
+      OFFSET,
+    );
+
+    expect(out).toContain("Книга про то, что шаг должен быть меньше страха");
+    // Порядок — решение владельца: мысль о книге про книгу целиком, цитаты про
+    // места в ней. Сверяется СМЕЩЕНИЯМИ, а не глазами.
+    const thoughtAt = out.indexOf("шаг должен быть меньше страха");
+    const headingAt = out.indexOf(DEFAULT_TEMPLATE.split("\n")[0]);
+    const quoteAt = out.indexOf("> [!");
+    expect(headingAt).toBeLessThan(thoughtAt);
+    expect(thoughtAt).toBeLessThan(quoteAt);
+  });
+
+  // ⚠️ Пустая мысль не должна оставлять по себе ни пустой строки, ни следа:
+  // заметка человека без мысли обязана выглядеть ровно так же, как до 1.17.
+  test("без мысли о книге секция не меняется вовсе", () => {
+    const withThought = renderSection(
+      book({ ownThought: undefined }),
+      [annotation()],
+      DEFAULT_TEMPLATE,
+      OFFSET,
+    );
+    const empty = renderSection(book({ ownThought: "" }), [annotation()], DEFAULT_TEMPLATE, OFFSET);
+
+    expect(empty).toEqual(withThought);
+    // И между заголовком и первой цитатой — ровно одна пустая строка, как было.
+    expect(withThought).toContain(`${DEFAULT_TEMPLATE.split("\n")[0]}\n\n> [!`);
+  });
+
   // Вырежьте в `render` ветку «пустое значение — кусок не рисуется» — тест
   // обязан упасть: под цитатой появятся разделитель и слово «Мысль».
   test("выписка без своей мысли не порождает пустого подзаголовка", () => {
@@ -524,6 +577,34 @@ describe("границы управляемой секции", () => {
     expect(anchors(section)).toHaveLength(2);
   });
 
+  // ⚠️ **Замер на живом Obsidian 20260925, демо-стенд.** Секция кончается якорем
+  // `^hl-…`, и без пустой строки он прилипал к закрывающему маркеру: две строки
+  // подряд — один абзац, а якорь считается якорем только стоя в абзаце один.
+  // Человек видел в режиме чтения мусорную строку из тридцати пяти знаков под
+  // последней цитатой — в КАЖДОЙ заметке. Замер прямой: видимых якорей было 1,
+  // со вставленной пустой строкой стало 0; служебные строки и маркеры как были
+  // невидимы, так и остались.
+  //
+  // РЕЗ: уберите `\n` перед `${SECTION_END}` в `wrapSection` — краснеет эта
+  // проверка. Второе место того же правила — `assembleInner` (`merge/fuse.ts`),
+  // у него свой рез в `merge.test.ts`.
+  test("секция кончается пустой строкой: якорь не прилипает к маркеру", () => {
+    const section = renderSection(book(), [nth(1)], DEFAULT_TEMPLATE, OFFSET);
+    const rows = lines(section);
+    const end = rows.indexOf(SECTION_END);
+    expect(end).toBeGreaterThan(1);
+    expect(rows[end - 1]).toBe("");
+    expect(rows[end - 2]).toMatch(/^\^hl-/);
+  });
+
+  // ⚠️ Половина, без которой первая ввела бы пустую строку и в пустую секцию:
+  // там якорей нет вовсе, прилипать нечему, а лишняя строка между маркерами
+  // была бы изменением байтов на ровном месте.
+  test("у пустой секции маркеры остаются соседними строками", () => {
+    const empty = wrapSection([]);
+    expect(empty).toBe(`${SECTION_BEGIN}\n${SECTION_END}`);
+  });
+
   test("маркер внутри цитаты не выходит наружу коллаута", () => {
     // Текст книги в заметку попадает дословно: экранировать его нельзя — задача
     // 16 требует, чтобы цитата читалась и без Beresta. Защита здесь другая: в
@@ -557,25 +638,25 @@ describe("шаблон человека ошибается словами", () =
   // Вырежьте бросок в `lookupField` (верните пустую строку) — тест обязан
   // упасть: опечатка в шаблоне тихо выест кусок заметки.
   test("незнакомое имя — ошибка, а не пустое место", () => {
-    expect(() => renderTemplate("{{коммент}}", scope)).toThrow(TemplateError);
-    expect(() => renderTemplate("{{cmment}}", scope)).toThrow(/comment/);
+    expect(() => renderTemplate("{{коммент}}", scope, RU_PASS)).toThrow(TemplateError);
+    expect(() => renderTemplate("{{cmment}}", scope, RU_PASS)).toThrow(/comment/);
   });
 
   test("незакрытый кусок назван по имени", () => {
-    expect(() => renderTemplate("{{#comment}}текст", scope)).toThrow(/не закрыт/);
+    expect(() => renderTemplate("{{#comment}}текст", scope, RU_PASS)).toThrow(/не закрыт/);
   });
 
   test("лишняя закрывающая метка названа по имени", () => {
-    expect(() => renderTemplate("текст{{/comment}}", scope)).toThrow(/открывающего/);
+    expect(() => renderTemplate("текст{{/comment}}", scope, RU_PASS)).toThrow(/открывающего/);
   });
 
   test("куски, закрытые вперемешку, — ошибка", () => {
     const mixed = { fields: { a: "1", b: "2" }, lists: {} };
-    expect(() => renderTemplate("{{#a}}{{#b}}{{/a}}{{/b}}", mixed)).toThrow(/в том же порядке/);
+    expect(() => renderTemplate("{{#a}}{{#b}}{{/a}}{{/b}}", mixed, RU_PASS)).toThrow(/в том же порядке/);
   });
 
   test("обломок скобок — ошибка, а не строка «{{ comment }» в заметке", () => {
-    expect(() => renderTemplate("{{ comment }", scope)).toThrow(/без пары/);
+    expect(() => renderTemplate("{{ comment }", scope, RU_PASS)).toThrow(/без пары/);
   });
 
   test("ошибка шаблона не порождает текста", () => {
@@ -714,7 +795,7 @@ describe("запись в открытую заметку", () => {
   });
 
   test("отказ называет заметку и говорит, что делать", () => {
-    const verdict = writeVerdict({ path, onDisk: "а", inEditor: "б" });
+    const verdict = writeVerdict({ path, onDisk: "а", inEditor: "б" }, RU_PASS);
     if (verdict.kind !== "defer") throw new Error("ожидалось откладывание");
     // Молчаливое откладывание — та же беда, что молчаливая запись: человек
     // неделю ждёт выписок и не знает, что их держит.

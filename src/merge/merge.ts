@@ -35,6 +35,8 @@
  * якорь из соседней заметки: слияние видит один файл, а не хранилище.
  */
 
+import { interfaceLanguage } from "../render/defaults";
+import { counted, fill, panelWords } from "../ui/words";
 import { SECTION_BEGIN, SECTION_END } from "../render/section";
 import { applyFrontmatter, type FrontmatterPatch } from "./frontmatter";
 import {
@@ -47,7 +49,7 @@ import {
 import { anchorsIn, splitFile } from "./zones";
 
 export type { KnownSection, MergeConflict } from "./fuse";
-export { WARNING_HEAD } from "./fuse";
+export { warningHead } from "./fuse";
 
 /** Почему проход отказался от файла. */
 export type MergeRefusal = "no-snapshot" | "markers-broken" | "section-missing" | "too-many-removals";
@@ -70,6 +72,14 @@ export interface MergeOptions {
   readonly removalShare?: number;
   /** Число блоков, выше которого проход останавливается. */
   readonly removalCount?: number;
+  /**
+   * Язык слов предупреждения о расхождении — тот же, что передан отрисовке.
+   *
+   * ⚠️ Пустое значение здесь означает «язык интерфейса», а не «русский»: слова
+   * предупреждения стоят В ЗАМЕТКЕ рядом со словами отрисовки, и разойтись они
+   * не имеют права (`render/words.ts`).
+   */
+  readonly language?: string;
 }
 
 /** Доля и число из плана: больше пятой части ИЛИ больше двадцати штук. */
@@ -109,11 +119,13 @@ export function merge(
   known: KnownSection,
   options: MergeOptions = {},
 ): MergeResult {
+  const words = panelWords(options.language ?? interfaceLanguage());
+  const say = words.pass;
   if (rendered === undefined) {
-    return refusal(fileText, known, "no-snapshot", REFUSAL_WORDS["no-snapshot"]);
+    return refusal(fileText, known, "no-snapshot", say.noExportYet);
   }
 
-  const zones = splitFile(fileText);
+  const zones = splitFile(fileText, say);
   if (zones.kind === "broken") {
     return refusal(fileText, known, "markers-broken", zones.message);
   }
@@ -122,7 +134,7 @@ export function merge(
 
   if (zones.kind === "no-section") {
     if (options.mayCreateSection !== true) {
-      return refusal(fileText, known, "section-missing", REFUSAL_WORDS["section-missing"]);
+      return refusal(fileText, known, "section-missing", say.noSection);
     }
     return create(fileText, zones.frontmatterLines, zones.bodyLines, renderedInner, options);
   }
@@ -133,6 +145,7 @@ export function merge(
     rendered: renderedInner,
     known,
     outside: anchorsIn([...zones.beforeLines, ...zones.afterLines]),
+    language: options.language,
   });
 
   if (tripsSafety(fused.removed.length, fused.previousCount, options)) {
@@ -144,11 +157,9 @@ export function merge(
       withdrawn: fused.withdrawn,
       deleted: fused.deleted,
       refused: "too-many-removals",
-      message:
-        `Этот проход убрал бы ${fused.removed.length} ${plural(fused.removed.length)} из ` +
-        `${fused.previousCount}. Так бывает, когда указатель Beresta прочитан наполовину ` +
-        "или снимок приехал с другой машины, — поэтому Beresta остановилась и ничего не " +
-        "записала. Посмотрите список и подтвердите, если всё верно.",
+      message: fill(counted(words, fused.removed.length, say.tooManyRemovals), {
+        previous: fused.previousCount,
+      }),
       known,
     };
   }
@@ -174,17 +185,6 @@ export function merge(
 }
 
 // MARK: - Внутреннее
-
-const REFUSAL_WORDS: Readonly<Record<"no-snapshot" | "section-missing", string>> = {
-  "no-snapshot":
-    "Выгрузки Beresta в этом хранилище ещё нет: приложение сюда ни разу не писало. " +
-    "Заметки не трогаем.",
-  "section-missing":
-    "В этой заметке нет секции Beresta — ни открывающего маркера, ни закрывающего. " +
-    "Сама Beresta её не заводит: если вы убрали секцию нарочно, возвращать её без " +
-    "спроса значит спорить с вами. Скажите «Вернуть секцию Beresta», и она появится " +
-    "в конце заметки.",
-};
 
 function refusal(
   fileText: string,
@@ -231,6 +231,7 @@ function create(
     rendered: renderedInner,
     known: { blocks: {} },
     outside: anchorsIn(bodyLines),
+    language: options.language,
   });
 
   const body = bodyLines.join("\n");
@@ -292,12 +293,4 @@ function innerOf(rendered: string): string[] {
   return [];
 }
 
-function plural(count: number): string {
-  const tens = count % 100;
-  const ones = count % 10;
-  if (tens >= 11 && tens <= 14) return "блоков";
-  if (ones === 1) return "блок";
-  if (ones >= 2 && ones <= 4) return "блока";
-  return "блоков";
-}
 

@@ -13,6 +13,7 @@ import {
   readTemplateField,
   stateToJSON,
 } from "../src/settings";
+import { panelWords } from "../src/ui/words";
 
 /**
  * Настройки и память в `data.json`.
@@ -152,9 +153,31 @@ describe("память", () => {
  * СЛОВАМИ поле отказывает. Само окно (`ui/settings-tab.ts`) поверх этих слов
  * только показывает и возвращает прежнее значение в поле.
  */
+/** Слова отказов проверяются русскими: их и писал владелец; английские — в `panel-language`. */
+const RU = panelWords("ru").settings;
+
+describe("папка для новых заметок по умолчанию", () => {
+  // Решение владельца 20260925 (вопрос 10.1): по языку интерфейса при ПЕРВОМ
+  // запуске, записанное не трогается — иначе один человек на двух языках
+  // получил бы две папки.
+  test("по языку при первом запуске, в корне хранилища: русский — «Библиотека», остальные — «Library»", () => {
+    expect(initialState(KARAGANDA, "ru").settings.libraryFolder).toBe("Библиотека");
+    expect(initialState(KARAGANDA, "en").settings.libraryFolder).toBe("Library");
+    expect(initialState(KARAGANDA, "de").settings.libraryFolder).toBe("Library");
+    expect(readState({}, KARAGANDA, "ru").settings.libraryFolder).toBe("Библиотека");
+  });
+
+  test("записанная папка переживает смену языка", () => {
+    const stored = { version: 1, settings: { libraryFolder: "Base/Библиотека" } };
+    expect(readState(stored, KARAGANDA, "en").settings.libraryFolder).toBe("Base/Библиотека");
+    const english = { version: 1, settings: { libraryFolder: "Books" } };
+    expect(readState(english, KARAGANDA, "ru").settings.libraryFolder).toBe("Books");
+  });
+});
+
 describe("поля страницы настроек", () => {
   test("слово вместо числа отвергнуто, и отказ назван словами", () => {
-    const verdict = readNumberField(OFFSET_FIELD, "Караганда");
+    const verdict = readNumberField(OFFSET_FIELD, "Караганда", RU);
     expect(verdict.kind).toBe("refused");
     if (verdict.kind !== "refused") return;
     // Человек обязан узнать свою строку — иначе непонятно, на что ругаются.
@@ -166,7 +189,7 @@ describe("поля страницы настроек", () => {
   });
 
   test("число вне границ отвергнуто и границы названы", () => {
-    const verdict = readNumberField(OFFSET_FIELD, "5000");
+    const verdict = readNumberField(OFFSET_FIELD, "5000", RU);
     expect(verdict.kind).toBe("refused");
     if (verdict.kind !== "refused") return;
     expect(verdict.said).toContain("от -840 до 840");
@@ -201,10 +224,10 @@ describe("поля страницы настроек", () => {
     for (const [field, patch, key] of cases) {
       for (const edge of [field.least, field.most]) {
         const verdict = readNumberField(field, String(edge));
-        expect(verdict, `${field.name} ${edge}`).toEqual({ kind: "ok", value: edge });
+        expect(verdict, `${field.key} ${edge}`).toEqual({ kind: "ok", value: edge });
         const settings = readState({ settings: patch(edge) }, KARAGANDA)
           .settings as unknown as Record<string, number>;
-        expect(settings[key], `${field.name} ${edge}`).toBe(patch(edge)[key]);
+        expect(settings[key], `${field.key} ${edge}`).toBe(patch(edge)[key]);
       }
       // На шаг за границей поле отказывает — и разбор файла тоже.
       expect(readNumberField(field, String(field.least - 1)).kind).toBe("refused");
@@ -213,7 +236,7 @@ describe("поля страницы настроек", () => {
   });
 
   test("папки, которой нет, отказа не будет — но и молчания тоже", () => {
-    const verdict = readFolderField("Нет такой папки", () => false);
+    const verdict = readFolderField("Нет такой папки", () => false, RU);
     expect(verdict.kind).toBe("ok");
     if (verdict.kind !== "ok") return;
     expect(verdict.value).toBe("Нет такой папки");
@@ -229,7 +252,7 @@ describe("поля страницы настроек", () => {
   });
 
   test("знак, которого файловая система не примет, отвергнут", () => {
-    const verdict = readFolderField("Библиотека: книги", () => true);
+    const verdict = readFolderField("Библиотека: книги", () => true, RU);
     expect(verdict.kind).toBe("refused");
     if (verdict.kind !== "refused") return;
     expect(verdict.said).toContain("настройка осталась прежней");
@@ -238,7 +261,7 @@ describe("поля страницы настроек", () => {
 
 describe("шаблон секции выписок", () => {
   test("пусто — это «как у всех», а не пустая секция", () => {
-    const verdict = readTemplateField("   \n  ");
+    const verdict = readTemplateField("   \n  ", RU);
     expect(verdict.kind).toBe("ok");
     if (verdict.kind !== "ok") return;
     // Именно `undefined`, а не пустая строка: пустой шаблон рисуется БЕЗ жалоб
@@ -248,7 +271,7 @@ describe("шаблон секции выписок", () => {
   });
 
   test("шаблон без {{anchor}} отвергнут, и сказано почему", () => {
-    const verdict = readTemplateField("{{#annotations}}\n> {{text}}\n{{/annotations}}");
+    const verdict = readTemplateField("{{#annotations}}\n> {{text}}\n{{/annotations}}", RU);
     expect(verdict.kind).toBe("refused");
     if (verdict.kind !== "refused") return;
     expect(verdict.said).toContain("{{anchor}}");

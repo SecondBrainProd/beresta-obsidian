@@ -9,6 +9,7 @@ import {
   syncNowWords,
   type StatusState,
 } from "../src/status";
+import { panelWords } from "../src/ui/words";
 
 /**
  * Состояние словами.
@@ -20,6 +21,8 @@ import {
  */
 
 const KARAGANDA = 300;
+/** Слова проверяются русскими — их писал владелец; английские — в `panel-language`. */
+const RU = panelWords("ru");
 
 function status(over: Partial<StatusState> = {}): StatusState {
   return { ...EMPTY_STATUS, ...over };
@@ -27,7 +30,7 @@ function status(over: Partial<StatusState> = {}): StatusState {
 
 describe("строка состояния", () => {
   test("говорит, на какой момент данные, а не «синхронизировано»", () => {
-    const line = statusLine(status({ snapshot: "целый", dataStamp: "20260806 21:14" }));
+    const line = statusLine(status({ snapshot: "целый", dataStamp: "20260806 21:14" }), RU);
     expect(line).toBe("Beresta: данные на 20260806 21:14");
     // «Готово», «синхронизировано» и галочка — это ответ на вопрос, которого
     // человек не задавал. Отставание такими словами не видно.
@@ -35,26 +38,26 @@ describe("строка состояния", () => {
   });
 
   test("выгрузки ещё нет — так и сказано, а не «0 книг»", () => {
-    expect(statusLine(status({ snapshot: "нет" }))).toBe("Beresta: выгрузки ещё нет");
+    expect(statusLine(status({ snapshot: "нет" }), RU)).toBe("Beresta: выгрузки ещё нет");
   });
 
   test("выгрузка приехала наполовину — это видно в строке", () => {
-    const line = statusLine(status({ snapshot: "наполовину", dataStamp: "20260806 21:14", problems: 2 }));
+    const line = statusLine(status({ snapshot: "наполовину", dataStamp: "20260806 21:14", problems: 2 }), RU);
     expect(line).toContain("выгрузка ещё едет");
     expect(line).toContain("2 книги ещё едет");
   });
 
   test("числа склоняются по-русски", () => {
-    expect(statusLine(status({ snapshot: "целый", dataStamp: "20260806 21:14", conflicts: 1 }))).toContain(
+    expect(statusLine(status({ snapshot: "целый", dataStamp: "20260806 21:14", conflicts: 1 }), RU)).toContain(
       "1 ваша правка",
     );
-    expect(statusLine(status({ snapshot: "целый", dataStamp: "20260806 21:14", conflicts: 3 }))).toContain(
+    expect(statusLine(status({ snapshot: "целый", dataStamp: "20260806 21:14", conflicts: 3 }), RU)).toContain(
       "3 ваши правки",
     );
-    expect(statusLine(status({ snapshot: "целый", dataStamp: "20260806 21:14", conflicts: 11 }))).toContain(
+    expect(statusLine(status({ snapshot: "целый", dataStamp: "20260806 21:14", conflicts: 11 }), RU)).toContain(
       "11 ваших правок",
     );
-    expect(statusLine(status({ snapshot: "целый", dataStamp: "20260806 21:14", deferred: 2 }))).toContain(
+    expect(statusLine(status({ snapshot: "целый", dataStamp: "20260806 21:14", deferred: 2 }), RU)).toContain(
       "2 заметки ждут сохранения",
     );
   });
@@ -72,9 +75,9 @@ describe("строка состояния", () => {
       unbound: 4,
     });
     const words = [
-      statusLine(busy),
-      ...statusHint(busy, Date.parse("2026-08-09T10:00:00Z"), KARAGANDA),
-      syncNowWords(busy),
+      statusLine(busy, RU),
+      ...statusHint(busy, Date.parse("2026-08-09T10:00:00Z"), KARAGANDA, RU),
+      syncNowWords(busy, RU),
     ].join("\n");
     for (const alarm of ["ошибк", "сбой", "авари", "внимание", "критич", "!"]) {
       expect(words.toLowerCase(), `тревожное слово: ${alarm}`).not.toContain(alarm);
@@ -88,6 +91,7 @@ describe("подпись к строке состояния", () => {
       status({ snapshot: "целый", dataStamp: "20260806 21:14" }),
       Date.parse("2026-08-09T16:00:00Z"),
       KARAGANDA,
+      RU,
     );
     expect(lines.join("\n")).toContain("Данные на 20260806 21:14 — это 3 дня назад");
   });
@@ -97,25 +101,26 @@ describe("подпись к строке состояния", () => {
       status({ snapshot: "целый", dataStamp: "20260806 21:14" }),
       Date.parse("2026-08-06T18:40:00Z"),
       KARAGANDA,
+      RU,
     );
     expect(lines.join("\n")).toContain("Данные на 20260806 21:14.");
     expect(lines.join("\n")).not.toContain("назад");
   });
 
   test("объясняет каждое состояние снимка своими словами", () => {
-    expect(statusHint(status({ snapshot: "нет" }), 0, KARAGANDA).join("\n")).toContain(
+    expect(statusHint(status({ snapshot: "нет" }), 0, KARAGANDA, RU).join("\n")).toContain(
       "Выгрузки Beresta в этом хранилище ещё нет",
     );
-    expect(statusHint(status({ snapshot: "не-читается" }), 0, KARAGANDA).join("\n")).toContain(
+    expect(statusHint(status({ snapshot: "не-читается" }), 0, KARAGANDA, RU).join("\n")).toContain(
       "не разбирается",
     );
-    expect(statusHint(status({ snapshot: "наполовину" }), 0, KARAGANDA).join("\n")).toContain(
+    expect(statusHint(status({ snapshot: "наполовину" }), 0, KARAGANDA, RU).join("\n")).toContain(
       "посреди синхронизации",
     );
   });
 
   test("отложенная запись объяснена причиной, а не «не удалось»", () => {
-    const lines = statusHint(status({ snapshot: "целый", deferred: 1 }), 0, KARAGANDA).join("\n");
+    const lines = statusHint(status({ snapshot: "целый", deferred: 1 }), 0, KARAGANDA, RU).join("\n");
     expect(lines).toContain("несохранёнными правками");
     expect(lines).toContain("на диске");
   });
@@ -173,66 +178,66 @@ describe("ответ на команду «Разложить выписки с�
   });
 
   test("не повторяет строку состояния", () => {
-    const said = syncNowWords(OWNER);
-    expect(said).not.toBe(statusLine(OWNER));
+    const said = syncNowWords(OWNER, RU);
+    expect(said).not.toBe(statusLine(OWNER, RU));
     // Отметка времени — единственное, что говорила прежняя команда, и
     // единственное, чего человек не спрашивал.
     expect(said).not.toContain("20260818 1047");
   });
 
   test("называет, сколько данных есть и где они", () => {
-    const said = syncNowWords(OWNER);
+    const said = syncNowWords(OWNER, RU);
     expect(said).toContain("11 книг");
     expect(said).toContain("291 выписка");
     expect(said).toContain("Выписки лежат в 1 заметке");
   });
 
   test("считает книги, которым некуда лечь, а не «есть ли хоть одна привязка»", () => {
-    const said = syncNowWords(OWNER);
+    const said = syncNowWords(OWNER, RU);
     expect(said).toContain("Ещё 10 книгам некуда лечь");
     expect(said).toContain("«Привязать книги к заметкам»");
   });
 
   test("привязано ноль — подсказка та же, но сказана целиком", () => {
-    const said = syncNowWords({ ...OWNER, unbound: 11, notesWithQuotes: 0 });
+    const said = syncNowWords({ ...OWNER, unbound: 11, notesWithQuotes: 0 }, RU);
     expect(said).toContain("Ни одна книга не привязана к заметке");
     expect(said).toContain("Начните с команды «Привязать книги к заметкам»");
   });
 
   test("все книги на местах — про привязку молчим", () => {
-    const said = syncNowWords({ ...OWNER, unbound: 0, notesWithQuotes: 9 });
+    const said = syncNowWords({ ...OWNER, unbound: 0, notesWithQuotes: 9 }, RU);
     expect(said).toContain("Выписки лежат в 9 заметках");
     expect(said).not.toContain("Привязать книги к заметкам");
   });
 
   test("выгрузки нет — сказано это, а не отметка времени", () => {
-    const said = syncNowWords(status({ snapshot: "нет" }));
+    const said = syncNowWords(status({ snapshot: "нет" }), RU);
     expect(said).toContain("выгрузки Beresta в этом хранилище нет");
     expect(said).toContain("раскладывать нечего");
   });
 
   test("указатель не читается — сказано, что заметки не тронуты", () => {
-    expect(syncNowWords(status({ snapshot: "не-читается" }))).toContain("заметки не тронуты");
+    expect(syncNowWords(status({ snapshot: "не-читается" }), RU)).toContain("заметки не тронуты");
   });
 
   test("выгрузка есть, книг в ней нет — это не «раскладывать некуда»", () => {
-    const said = syncNowWords(status({ snapshot: "целый", books: 0 }));
+    const said = syncNowWords(status({ snapshot: "целый", books: 0 }), RU);
     expect(said).toContain("нет ни одной книги с выписками");
     expect(said).not.toContain("Привязать книги к заметкам");
   });
 
   test("недоехавшая выгрузка и отложенные заметки названы отдельными строками", () => {
-    const said = syncNowWords({ ...OWNER, snapshot: "наполовину", problems: 2, deferred: 1 });
+    const said = syncNowWords({ ...OWNER, snapshot: "наполовину", problems: 2, deferred: 1 }, RU);
     expect(said).toContain("2 книги ещё едет");
     expect(said).toContain("1 заметка ждёт сохранения");
   });
 
   test("числа склоняются по-русски", () => {
-    const one = syncNowWords({ ...OWNER, books: 1, quotes: 1, unbound: 0, notesWithQuotes: 1 });
+    const one = syncNowWords({ ...OWNER, books: 1, quotes: 1, unbound: 0, notesWithQuotes: 1 }, RU);
     expect(one).toContain("1 книга, 1 выписка");
-    const alone = syncNowWords({ ...OWNER, books: 2, quotes: 5, unbound: 1, notesWithQuotes: 1 });
+    const alone = syncNowWords({ ...OWNER, books: 2, quotes: 5, unbound: 1, notesWithQuotes: 1 }, RU);
     expect(alone).toContain("Ещё 1 книге некуда лечь");
-    const few = syncNowWords({ ...OWNER, books: 4, quotes: 22, unbound: 3, notesWithQuotes: 2 });
+    const few = syncNowWords({ ...OWNER, books: 4, quotes: 22, unbound: 3, notesWithQuotes: 2 }, RU);
     expect(few).toContain("4 книги, 22 выписки");
     expect(few).toContain("Ещё 3 книгам некуда лечь");
     expect(few).toContain("в 2 заметках");
@@ -252,6 +257,7 @@ describe("подпись про заметки с выписками", () => {
       status({ snapshot: "целый", dataStamp: "20260818 1047", notesWithQuotes: 2, unbound: 9 }),
       Date.parse("2026-08-18T05:47:00Z"),
       KARAGANDA,
+      RU,
     ).join("\n");
     expect(lines).toContain("Заметок с выписками: 2.");
     expect(lines).toContain("Книг без заметки: 9.");
@@ -262,6 +268,7 @@ describe("подпись про заметки с выписками", () => {
       status({ snapshot: "целый", notesWithQuotes: 2, unbound: 0 }),
       0,
       KARAGANDA,
+      RU,
     ).join("\n");
     expect(lines).not.toContain("Книг без заметки");
   });

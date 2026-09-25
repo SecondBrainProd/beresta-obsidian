@@ -1,9 +1,9 @@
 {
   "id": "beresta",
   "name": "Beresta",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "minAppVersion": "1.7.2",
-  "description": "Brings highlights from the Beresta reader into your book notes as Markdown callouts, one managed section per book, your own text untouched, no network. Notes follow your Obsidian language (English or Russian); settings are Russian-only for now.",
+  "description": "Brings highlights from the Beresta reader into your book notes as Markdown callouts, one managed section per book, your own text untouched, no network. Notes and the plugin's own panels follow your Obsidian language: English or Russian.",
   "author": "Second Brain Production",
   "isDesktopOnly": false
 }

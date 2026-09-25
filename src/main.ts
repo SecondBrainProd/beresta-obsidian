@@ -12,6 +12,7 @@ import {
 import { commandSpecs, type CommandActions } from "./commands";
 import { BOOK_ID_KEY } from "./merge/frontmatter";
 import { PollSchedule } from "./poller";
+import { interfaceLanguage } from "./render/defaults";
 import { readState, stateToJSON, type BerestaSettings } from "./settings";
 import { statusHint, statusLine, syncNowWords } from "./status";
 import type { NoteStore } from "./sync/pass";
@@ -20,6 +21,7 @@ import { BackupModal } from "./ui/backup-modal";
 import { BindingModal } from "./ui/binding-modal";
 import { CONFLICTS_VIEW_TYPE, ConflictsPanel } from "./ui/conflicts-panel";
 import { BerestaSettingTab } from "./ui/settings-tab";
+import { fill, panelWords, type PanelWords } from "./ui/words";
 import { listBackups, restoreBackup, type BackupStore } from "./write/backup";
 import { indexPath } from "./snapshot/paths";
 
@@ -67,7 +69,7 @@ export default class BerestaPlugin extends Plugin {
     this.statusEl = this.addStatusBarItem();
     this.paint();
 
-    for (const spec of commandSpecs(this.actions())) {
+    for (const spec of commandSpecs(this.actions(), this.words.commands)) {
       if (!spec.needsNote) {
         this.addCommand({ id: spec.id, name: spec.name, callback: () => void spec.run("") });
         continue;
@@ -140,6 +142,11 @@ export default class BerestaPlugin extends Plugin {
     await this.run("опрос");
   }
 
+  /** Слова панелей — по языку интерфейса в момент, когда они нужны. */
+  private get words(): PanelWords {
+    return panelWords(interfaceLanguage());
+  }
+
   private async run(
     reason: "загрузка" | "опрос" | "команда" | "заметка",
     options: TickOptions = {},
@@ -152,7 +159,10 @@ export default class BerestaPlugin extends Plugin {
       // Проход, упавший непредвиденно, обязан сказать это вслух: плагин,
       // который молча перестал работать, выглядит как плагин, которому нечего
       // показать.
-      new Notice(`Beresta: проход не удался — ${(error as Error).message}`, 15_000);
+      new Notice(
+        fill(this.words.notices.passFailed, { message: (error as Error).message }),
+        15_000,
+      );
       return undefined;
     } finally {
       this.busy = false;
@@ -180,11 +190,7 @@ export default class BerestaPlugin extends Plugin {
       await new Promise((wake) => window.setTimeout(wake, 100));
     }
     if (this.busy) {
-      new Notice(
-        "Beresta: выбор не применён — предыдущий проход ещё идёт. Повторите " +
-          "команду «Привязать книги к заметкам».",
-        12_000,
-      );
+      new Notice(this.words.notices.choiceNotApplied, 12_000);
       return undefined;
     }
     return await this.run("команда", options);
@@ -195,10 +201,15 @@ export default class BerestaPlugin extends Plugin {
   private paint(): void {
     if (this.statusEl === undefined) return;
     const status = this.runner.status;
-    this.statusEl.setText(statusLine(status));
+    this.statusEl.setText(statusLine(status, this.words));
     this.statusEl.setAttr(
       "aria-label",
-      statusHint(status, Date.now(), this.runner.state.settings.timeZoneOffsetMinutes).join("\n"),
+      statusHint(
+        status,
+        Date.now(),
+        this.runner.state.settings.timeZoneOffsetMinutes,
+        this.words,
+      ).join("\n"),
     );
   }
 
@@ -224,7 +235,7 @@ export default class BerestaPlugin extends Plugin {
         // написана в углу окна, — то есть человеку, не поверившему строке,
         // показывали её же. Слова считает `syncNowWords` и проверяет обычный
         // тест; строк в ответе бывает до пяти, поэтому и время подлиннее.
-        new Notice(syncNowWords(this.runner.status), 15_000);
+        new Notice(syncNowWords(this.runner.status, this.words), 15_000);
       },
       bindBooks: async () => {
         await this.bindBooks();
@@ -249,15 +260,11 @@ export default class BerestaPlugin extends Plugin {
         // Ответ обязателен и в удаче, и в отказе: молчание здесь читается как
         // «плагин сломан», а не как «возвращать нечего».
         if (after !== undefined && after !== before) {
-          new Notice("Beresta: секция вернулась в заметку.", 6_000);
+          new Notice(this.words.notices.sectionReturned, 6_000);
         } else if (after === undefined) {
-          new Notice("Beresta: заметку не прочитать — секция не возвращена.", 8_000);
+          new Notice(this.words.notices.noteUnreadable, 8_000);
         } else {
-          new Notice(
-            "Beresta: секция не вернулась. Похоже, эта заметка не привязана ни к одной " +
-              "книге — привяжите её командой «Привязать книги к заметкам».",
-            10_000,
-          );
+          new Notice(this.words.notices.sectionNotReturned, 10_000);
         }
       },
       confirmRemovals: async (path) => {
@@ -274,11 +281,7 @@ export default class BerestaPlugin extends Plugin {
     await this.run("команда");
     const snapshot = this.runner.lastSnapshot;
     if (snapshot === undefined || snapshot.kind !== "present") {
-      new Notice(
-        `Beresta: выгрузки в этом хранилище нет (${indexPath()}). Сделайте выгрузку в ` +
-          "приложении — и книги появятся здесь.",
-        10_000,
-      );
+      new Notice(fill(this.words.notices.noExport, { path: indexPath() }), 10_000);
       return;
     }
 
@@ -314,11 +317,7 @@ export default class BerestaPlugin extends Plugin {
       // Проход состоялся, а раскладывать оказалось нечего: выгрузка исчезла
       // или перестала читаться между открытием окна и нажатием. Молчать здесь
       // нельзя — человек только что нажал.
-      new Notice(
-        "Beresta: выписки не легли — выгрузки Beresta сейчас не видно. Привязка " +
-          "не записана: выберите заново, когда выгрузка появится.",
-        12_000,
-      );
+      new Notice(this.words.notices.bindingNotSaved, 12_000);
       return;
     }
 
@@ -349,7 +348,7 @@ export default class BerestaPlugin extends Plugin {
    * сборка узлов и обращение к Obsidian.
    */
   private tellBinding(after: BindingAftermath): void {
-    const words = bindingNoticeWords(after);
+    const words = bindingNoticeWords(after, this.words);
     let notice: Notice | undefined;
     const message = createFragment((box) => {
       box.createDiv({ text: words.head });
@@ -386,11 +385,11 @@ export default class BerestaPlugin extends Plugin {
         // ради чего человек и откатывался. Незнакомые блоки Beresta не трогает
         // (`unknown-origin`), новые выписки приезжают по-прежнему.
         this.runner.forgetNote(restored.path);
+        const savedAt = records.find((one) => one.id === id)?.savedAt;
         new Notice(
-          `Beresta: заметка возвращена к версии от ${
-            records.find((one) => one.id === id)?.savedAt ?? "прежней"
-          }. Блоки в ней Beresta теперь не помнит и потому не трогает; новые выписки ` +
-            "будут приезжать по-прежнему.",
+          fill(this.words.notices.restoredToVersion, {
+            savedAt: savedAt ?? this.words.notices.previousVersion,
+          }),
           12_000,
         );
       })();
@@ -535,7 +534,7 @@ export default class BerestaPlugin extends Plugin {
 
   private fileAt(path: string): TFile {
     const file = this.app.vault.getAbstractFileByPath(path);
-    if (!(file instanceof TFile)) throw new Error(`заметки нет на месте: ${path}`);
+    if (!(file instanceof TFile)) throw new Error(fill(this.words.notices.noteMissing, { path }));
     return file;
   }
 }

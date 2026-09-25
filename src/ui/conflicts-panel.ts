@@ -14,6 +14,8 @@
 import { ItemView, type WorkspaceLeaf } from "obsidian";
 
 import { describeBoard, type BoardEntry } from "../conflicts-view";
+import { interfaceLanguage } from "../render/defaults";
+import { panelWords } from "./words";
 
 export const CONFLICTS_VIEW_TYPE = "beresta-conflicts";
 
@@ -34,7 +36,7 @@ export class ConflictsPanel extends ItemView {
   }
 
   override getDisplayText(): string {
-    return "Расхождения Beresta";
+    return panelWords(interfaceLanguage()).conflicts.panelTitle;
   }
 
   override getIcon(): string {
@@ -50,7 +52,7 @@ export class ConflictsPanel extends ItemView {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.addClass("beresta-conflicts");
-    for (const line of describeBoard(this.source())) {
+    for (const line of describeBoard(this.source(), panelWords(interfaceLanguage()))) {
       if (line === "") contentEl.createEl("br");
       else contentEl.createDiv({ text: line });
     }

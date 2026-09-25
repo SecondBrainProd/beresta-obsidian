@@ -32,7 +32,8 @@
 import { merge, type MergeConflict, type MergeOptions, type MergeRefusal } from "../merge/merge";
 import type { KnownSection } from "../merge/fuse";
 import { anchorsIn, splitFile } from "../merge/zones";
-import { DEFAULT_TEMPLATE } from "../render/defaults";
+import { defaultTemplate, interfaceLanguage } from "../render/defaults";
+import { panelWords } from "../ui/words";
 import { renderBookBody, wrapSection } from "../render/section";
 import type { Snapshot, SnapshotBook } from "../snapshot/model";
 import { fileStamp, stampOf } from "../status";
@@ -99,6 +100,8 @@ export interface SyncInput {
   readonly mayCreateSection?: ReadonlySet<string>;
   /** Заметки, по которым владелец подтвердил снятие предохранителя. */
   readonly allowRemovals?: ReadonlySet<string>;
+  /** Язык слов прохода и заметки; не назван — язык интерфейса. */
+  readonly language?: string;
   /** Сверить только эти заметки. Пусто — все привязанные. */
   readonly only?: ReadonlySet<string>;
 }
@@ -181,7 +184,18 @@ export async function runSync(input: SyncInput): Promise<SyncReport> {
   if (input.snapshot.kind !== "present") return report;
 
   const byUUID = new Map(input.snapshot.books.map((book) => [book.uuid, book]));
-  const template = input.settings.template ?? DEFAULT_TEMPLATE;
+  // ⚠️ Умолчание — по языку интерфейса Obsidian (долг 0.3а, 20260925): плагин
+  // лежит в каталоге сообщества с английским описанием, и русский заголовок
+  // любому читателю был первой строкой его же заметки. Свой шаблон человека
+  // сильнее всего: он задан руками и языку не подчиняется.
+  const template = input.settings.template ?? defaultTemplate();
+  // ⚠️ Язык слов передаётся ЯВНО, хотя у отрисовки есть то же умолчание.
+  // Отрисовка обязана быть чистой функцией (`RenderOptions`), а значит её
+  // умолчание — удобство для проверок и разовых вызовов, а не путь живого
+  // прохода. Забудь эту строку — и англоязычный читатель снова получит русские
+  // слова внутри английской головы секции; это сторожит проверка прохода.
+  const language = input.language ?? interfaceLanguage();
+  const say = panelWords(language).pass;
 
   for (const [path, bookIds] of input.bindings) {
     if (input.only !== undefined && !input.only.has(path)) continue;
@@ -217,8 +231,10 @@ export async function runSync(input: SyncInput): Promise<SyncReport> {
         books.map((book) =>
           renderBookBody(book, book.annotations, template, {
             timeZoneOffsetMinutes: input.settings.timeZoneOffsetMinutes,
+            language,
           }),
         ),
+        language,
       );
     } catch (error) {
       report.refusals.push({
@@ -236,6 +252,7 @@ export async function runSync(input: SyncInput): Promise<SyncReport> {
       allowRemovals: input.allowRemovals?.has(path) === true,
       removalShare: input.settings.removalShare,
       removalCount: input.settings.removalCount,
+      language,
     };
 
     const result = merge(onDisk, rendered, known, options);
@@ -253,7 +270,7 @@ export async function runSync(input: SyncInput): Promise<SyncReport> {
 
     if (!result.changed) continue;
 
-    const verdict = writeVerdict({ path, onDisk, inEditor: input.notes.editorText(path) });
+    const verdict = writeVerdict({ path, onDisk, inEditor: input.notes.editorText(path) }, say);
     if (verdict.kind === "defer") {
       report.deferred.push(path);
       continue;
@@ -282,7 +299,10 @@ export async function runSync(input: SyncInput): Promise<SyncReport> {
       // промежуток человек напечатать ничего не успевает: значит вопрос «нет
       // ли несохранённого» задаётся ровно тогда, когда ответ на него ещё
       // будет верен в момент записи.
-      const second = writeVerdict({ path, onDisk: current, inEditor: input.notes.editorText(path) });
+      const second = writeVerdict(
+        { path, onDisk: current, inEditor: input.notes.editorText(path) },
+        say,
+      );
       if (second.kind === "defer") {
         deferredInside = true;
         return current;

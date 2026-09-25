@@ -41,6 +41,8 @@ import type { Snapshot, SnapshotHeader } from "../snapshot/model";
 import type { BackupStore } from "../write/backup";
 import { runSync, type NoteStore, type SyncReport } from "./pass";
 import type { KnownSection } from "../merge/fuse";
+import { interfaceLanguage } from "../render/defaults";
+import { fill, panelWords, type PanelWords } from "../ui/words";
 
 export interface RunnerPorts {
   readonly source: WatchSource;
@@ -53,6 +55,8 @@ export interface RunnerPorts {
   now(): number;
   /** Сказать человеку словами. У Obsidian это `Notice`. */
   announce(line: string): void;
+  /** Слова уведомлений; не названы — по языку интерфейса. */
+  readonly words?: PanelWords;
 }
 
 export interface TickOptions {
@@ -211,7 +215,7 @@ export class SyncRunner {
    * разных сортов, и человеку (а равно проверке) важно, какого именно.
    */
   async tick(reason: LookReason, options: TickOptions = {}): Promise<RunOutcome> {
-    const look = await lookAtSnapshot(this.ports.source, this.current.watch, reason);
+    const look = await lookAtSnapshot(this.ports.source, this.current.watch, reason, this.words.pass);
     this.current = { ...this.current, watch: look.memory, lookedAt: this.ports.now() };
 
     if (look.kind === "снимка-нет") {
@@ -224,7 +228,7 @@ export class SyncRunner {
     if (look.kind === "не-читается") {
       // Один раз на эти байты: память об указателе уже помечена разложенной,
       // и следующий опрос по тем же байтам сюда не придёт.
-      this.ports.announce(`Beresta: ${look.message ?? "выгрузка не читается"}`);
+      this.ports.announce(`Beresta: ${look.message ?? this.words.pass.unreadableExport}`);
       await this.settle("не-читается");
       return { look: look.kind, report: undefined, status: this.status };
     }
@@ -272,6 +276,7 @@ export class SyncRunner {
       },
       settings: this.current.settings,
       now: this.ports.now(),
+      language: this.words.language,
       creating: options.creating,
       mayCreateSection: fresh,
       allowRemovals: options.allowRemovals,
@@ -350,6 +355,10 @@ export class SyncRunner {
     for (const ids of bindings.values()) for (const id of ids) this.boundBooks.add(id);
   }
 
+  private get words(): PanelWords {
+    return this.ports.words ?? panelWords(interfaceLanguage());
+  }
+
   /**
    * Сказать словами, что снимок не применён, — и назвать оба момента.
    *
@@ -360,11 +369,10 @@ export class SyncRunner {
   private skipLagging(header: SnapshotHeader): void {
     const offset = this.current.settings.timeZoneOffsetMinutes;
     this.ports.announce(
-      `Beresta: выгрузка собрана другим устройством и она старше разложенной ` +
-        `(${stampOf(header.generatedAt, offset)} против ` +
-        `${stampOf(this.current.appliedGeneratedAt, offset)}) — заметки не тронуты. ` +
-        "Отстающая выгрузка убрала бы из них выписки, которых на той машине ещё нет; " +
-        "как только она догонит, всё приедет само.",
+      fill(this.words.pass.laggingExport, {
+        theirs: stampOf(header.generatedAt, offset),
+        ours: stampOf(this.current.appliedGeneratedAt, offset),
+      }),
     );
   }
 
@@ -425,11 +433,8 @@ export class SyncRunner {
    */
   private say(report: SyncReport): void {
     if (report.deferred.length > 0) {
-      this.ports.announce(
-        `Beresta: ${report.deferred.length === 1 ? "заметка открыта" : "заметки открыты"} с ` +
-          "несохранёнными правками — выписки приедут, как только вы сохраните: " +
-          report.deferred.join(", "),
-      );
+      const say = this.words.pass.deferredNotes[this.words.form(report.deferred.length)];
+      this.ports.announce(fill(say, { paths: report.deferred.join(", ") }));
     }
     const safety = report.refusals.filter((one) => one.refused === "too-many-removals");
     if (safety.length > 0) {
@@ -440,11 +445,8 @@ export class SyncRunner {
       this.ports.announce(`Beresta: ${other[0].message}`);
     }
     if (report.missing.length > 0) {
-      this.ports.announce(
-        `Beresta: ${report.missing.length === 1 ? "привязанной заметки" : "привязанных заметок"} ` +
-          `нет на месте (${report.missing.join(", ")}). Заново не завожу — посмотрите панель ` +
-          "расхождений.",
-      );
+      const say = this.words.pass.missingNotes[this.words.form(report.missing.length)];
+      this.ports.announce(fill(say, { paths: report.missing.join(", ") }));
     }
   }
 }

@@ -1,8 +1,10 @@
 import type { SnapshotAnnotation, SnapshotBook } from "../snapshot/model";
 import { sha256Hex } from "../snapshot/sha256";
-import { DEFAULT_TEMPLATE } from "./defaults";
+import { defaultTemplate, interfaceLanguage } from "./defaults";
 import { bookOpenLink } from "./link";
 import { renderTemplate, TemplateError, type TemplateScope } from "./template";
+import { fill, panelWords } from "../ui/words";
+import { namedMark, noteWords, type NoteWords } from "./words";
 
 /**
  * Отрисовка управляемой секции — место, где машина сочиняет байты для заметки
@@ -62,6 +64,24 @@ export interface RenderOptions {
    * (задача 14) и проверить тестом.
    */
   readonly timeZoneOffsetMinutes?: number;
+
+  /**
+   * Язык слов, которые едут В ЗАМЕТКУ, — те же две буквы, что у Obsidian.
+   *
+   * **Почему это вход, а не чтение настроек внутри** — тот же довод, что у
+   * сдвига пояса выше: отрисовка обязана быть чистой функцией, иначе те же
+   * данные дадут разные байты на другой машине, а разные байты означают
+   * «человек правил блок». Живой проход передаёт язык явно (`sync/pass.ts`), и
+   * это сторожит отдельная проверка: забудь он — и англоязычный читатель снова
+   * получил бы русские слова.
+   *
+   * ⚠️ **Умолчание — язык интерфейса**, ровно как у `defaultTemplate()`: голова
+   * секции и слова внутри неё обязаны быть на одном языке, а разные умолчания у
+   * шаблона и у слов дали бы английский заголовок с русским «Росчерк» под ним.
+   *
+   * Смена языка перепишет машинные блоки ОДИН раз — см. `words.ts`.
+   */
+  readonly language?: string;
 }
 
 /**
@@ -73,10 +93,10 @@ export interface RenderOptions {
 export function renderSection(
   book: SnapshotBook,
   annotations: readonly SnapshotAnnotation[],
-  template: string = DEFAULT_TEMPLATE,
+  template: string = defaultTemplate(),
   options: RenderOptions = {},
 ): string {
-  return wrapSection([renderBookBody(book, annotations, template, options)]);
+  return wrapSection([renderBookBody(book, annotations, template, options)], options.language);
 }
 
 /**
@@ -90,10 +110,12 @@ export function renderSection(
 export function renderBookBody(
   book: SnapshotBook,
   annotations: readonly SnapshotAnnotation[],
-  template: string = DEFAULT_TEMPLATE,
+  template: string = defaultTemplate(),
   options: RenderOptions = {},
 ): string {
   const offset = options.timeZoneOffsetMinutes ?? 0;
+  const words = noteWords(options.language ?? interfaceLanguage());
+  const say = panelWords(options.language ?? interfaceLanguage()).pass;
   const ordered = [...annotations].sort(compareAnnotations);
   const scope: TemplateScope = {
     fields: {
@@ -103,14 +125,35 @@ export function renderBookBody(
       // в шаблоне свою строку не покажет: пустая строка «Источник:» хуже, чем
       // её отсутствие.
       source: book.source ?? "",
+      // Мысль ЧЕЛОВЕКА о книге целиком. Пусто — `{{#thought}}` свою строку не
+      // покажет, и заметка останется такой же, какой была до формата 1.17.
+      //
+      // ⚠️ Не описание издателя: того в снимке нет вовсе. Рисуется под
+      // заголовком секции, ДО цитат — решение владельца 20260923: мысль о
+      // книге про книгу целиком, а цитаты про места в ней.
+      thought: book.ownThought ?? "",
+      // ⚠️ **У мысли СВОЙ якорь, и без него её правка в заметке затиралась бы
+      // молча.** Единица владения при слиянии — блок с якорем (`fuse.ts`):
+      // плагин помнит хеш того, что записал последним, и правленый блок
+      // замораживает навсегда. Текст без якоря в зону машины попадает, но
+      // владельца не имеет — то есть перерисовывается каждый проход.
+      //
+      // А владелец прямо просил обратного: «улетает в заметку в Obsidian и там
+      // дорабатывается» (20260923).
+      //
+      // Приставка `hl-` обязательна — по ней якоря и ищутся
+      // (`ANCHOR_LINE`). Вставка `thought-` делает столкновение с якорем
+      // выписки невозможным ПО УСТРОЙСТВУ, а не по вероятности: якорь выписки —
+      // это `hl-` и 32 знака шестнадцатеричных, букве «t» там взяться неоткуда.
+      thoughtAnchor: thoughtAnchorFor(book),
       count: String(ordered.length),
       uuid: book.uuid,
     },
     lists: {
-      annotations: ordered.map((annotation) => itemScope(book, annotation, offset)),
+      annotations: ordered.map((annotation) => itemScope(book, annotation, offset, words)),
     },
   };
-  return renderTemplate(template, scope);
+  return renderTemplate(template, scope, say);
 }
 
 /**
@@ -122,29 +165,34 @@ export function renderBookBody(
  * теоретически возможна книга, в которой строка маркера встречается сама по
  * себе, и в этот день секция обязана не отрисоваться, а не разъехаться.
  */
-export function wrapSection(bodies: readonly string[]): string {
+export function wrapSection(
+  bodies: readonly string[],
+  language: string = interfaceLanguage(),
+): string {
   const body = bodies
     .map((part) => part.replace(/\n+$/, ""))
     .filter((part) => part !== "")
     .join("\n\n");
-  const section = body === "" ? `${SECTION_BEGIN}\n${SECTION_END}` : `${SECTION_BEGIN}\n${body}\n${SECTION_END}`;
+  // ⚠️ Пустая строка перед закрывающим маркером — та же починка, что в
+  // `assembleInner`: секция кончается якорем `^hl-…`, и прилипший к маркеру
+  // якорь показывался человеку обычным текстом (замер на живом Obsidian
+  // 20260925). Правило одно на оба места, иначе отрисовка и слияние давали бы
+  // разные байты одной и той же секции.
+  const section =
+    body === ""
+      ? `${SECTION_BEGIN}\n${SECTION_END}`
+      : `${SECTION_BEGIN}\n${body}\n\n${SECTION_END}`;
 
   const markers = section.split("\n").filter((line) => MARKER_LINE.test(line));
   if (markers.length !== 2) {
     throw new TemplateError(
-      `в отрисованной секции ${markers.length} строк-маркеров вместо двух. Так бывает, ` +
-        "если строка маркера встретилась в тексте выписки или её дописали в шаблон: " +
-        "секция разъехалась бы, и часть машинного текста оказалась бы в вашей части " +
-        "заметки. Beresta ничего не записала.",
+      fill(panelWords(language).pass.sectionMarkers, { count: markers.length }),
     );
   }
 
   const anchors = [...section.matchAll(/^\^(\S+)$/gm)].map((match) => match[1]);
   if (new Set(anchors).size !== anchors.length) {
-    throw new TemplateError(
-      "в отрисованной секции два блока получили один якорь. Такой блок в заметке " +
-        "перестал бы быть адресом одной выписки. Beresta ничего не записала.",
-    );
+    throw new TemplateError(panelWords(language).pass.sectionDuplicateAnchor);
   }
   return section;
 }
@@ -165,6 +213,15 @@ export function wrapSection(bodies: readonly string[]): string {
  * а не по вероятности, и якорь остаётся сверяемым глазами с идентификатором в
  * приложении.
  */
+/// Якорь блока мысли о книге — `hl-thought-<uuid книги без дефисов>`.
+///
+/// Приставка `hl-` та же, что у выписок: по ней якоря ищет `ANCHOR_LINE`, и
+/// своя приставка означала бы, что блок мысли слиянию невидим. Вставка
+/// `thought-` разводит пространства имён по устройству.
+export function thoughtAnchorFor(book: SnapshotBook): string {
+  return `${ANCHOR_PREFIX}thought-${book.uuid.replace(/-/g, "").toLowerCase()}`;
+}
+
 export function anchorFor(annotation: SnapshotAnnotation): string {
   const uuid = annotation.uuid;
   if (uuid !== undefined && /^[0-9A-Fa-f-]+$/.test(uuid)) {
@@ -182,18 +239,20 @@ function itemScope(
   book: SnapshotBook,
   annotation: SnapshotAnnotation,
   offset: number,
+  words: NoteWords,
 ): TemplateScope {
   const date = formatDate(annotation.created, offset);
   const link = bookOpenLink(book.uuid, annotation.cfi);
-  const signature = sourceLink(date, link);
+  const signature = sourceLink(date, link, words);
   // Жест называется словом только у блока с цитатой: у блока без неё имя
   // пометки — это его первая строка, и в подписи оно повторялось бы.
-  const gesture = anchoredQuote(annotation) === undefined ? "" : gestureOf(annotation.markKind);
+  const gesture =
+    anchoredQuote(annotation) === undefined ? "" : gestureOf(annotation.markKind, words);
   return {
     fields: {
       heading: heading(book, annotation),
       callout: calloutHead(annotation),
-      text: markBody(annotation),
+      text: markBody(annotation, words),
       caption: caption(gesture, signature),
       gesture,
       quote: annotation.quote ?? "",
@@ -316,13 +375,14 @@ function calloutHead(annotation: SnapshotAnnotation): string {
  * другой редакции, распознавателя PDF или самого человека, — не знает никто, и
  * выдумывать здесь нечего.
  */
-function markBody(annotation: SnapshotAnnotation): string {
+function markBody(annotation: SnapshotAnnotation, words: NoteWords): string {
   const quote = anchoredQuote(annotation);
   if (quote !== undefined) return quote;
 
   const page = annotation.pageLabel?.trim();
-  const name = kindNoun(annotation.markKind);
-  const head = page === undefined || page === "" ? `_${name}_` : `_${name}, стр. ${page}_`;
+  const name = kindNoun(annotation.markKind, words);
+  const head =
+    page === undefined || page === "" ? `_${name}_` : `_${name}, ${words.page} ${page}_`;
   const stranded = annotation.strandedText?.trim();
   return stranded === undefined || stranded === "" ? head : `${head}\n${stranded}`;
 }
@@ -334,21 +394,14 @@ function markBody(annotation: SnapshotAnnotation): string {
  * `beresta:type` завтрашней сборки или чужого писателя — это не ошибка
  * (`docs/vault-export.md`, п. 3 «Незнакомое значение знакомого поля»). Имя
  * едет в кавычках как есть, и человек видит, чего мы не поняли.
+ *
+ * Сами имена — в `words.ts`, по языку интерфейса.
  */
-function kindNoun(kind: string | undefined): string {
+function kindNoun(kind: string | undefined, words: NoteWords): string {
   const value = kind?.trim() ?? "";
-  if (value === "") return "Пометка";
-  return KIND_NOUNS[value] ?? `Пометка «${value}»`;
+  if (value === "") return words.mark;
+  return words.nouns[value] ?? namedMark(words, value);
 }
-
-const KIND_NOUNS: Readonly<Record<string, string>> = {
-  ink: "Росчерк",
-  underline: "Подчёркивание",
-  note: "Заметка",
-  highlight: "Выделение",
-  text: "Надпись",
-  area: "Область",
-};
 
 /**
  * Жест — одним словом в подписи блока, и только когда он не «выделение».
@@ -369,19 +422,11 @@ const KIND_NOUNS: Readonly<Record<string, string>> = {
  * `underline`, `ink`, `area` выбирают отдельно. Тем же правилом цвет НЕ
  * молчит ни на одном блоке — там «обычного» нет (см. `defaults.ts`).
  */
-function gestureOf(kind: string | undefined): string {
+function gestureOf(kind: string | undefined, words: NoteWords): string {
   const value = kind?.trim() ?? "";
   if (value === "" || value === "highlight") return "";
-  return KIND_GESTURES[value] ?? `Пометка «${value}»`;
+  return words.gestures[value] ?? namedMark(words, value);
 }
-
-const KIND_GESTURES: Readonly<Record<string, string>> = {
-  underline: "Подчёркнуто",
-  ink: "Росчерк",
-  area: "Обведена область",
-  note: "Заметка",
-  text: "Надпись",
-};
 
 /**
  * Подпись блока целиком: чем помечено и когда.
@@ -418,9 +463,9 @@ function formatTags(tags: readonly string[]): string {
  * осколка сирот — книги у неё нет, открывать нечего. Даты нет, если время
  * выделения не разбирается: писать «Invalid Date» в заметку человека нельзя.
  */
-function sourceLink(date: string, link: string): string {
+function sourceLink(date: string, link: string, words: NoteWords): string {
   if (link === "") return date;
-  if (date === "") return `[Открыть в Beresta](${link})`;
+  if (date === "") return `[${words.open}](${link})`;
   return `[${date}](${link})`;
 }
 

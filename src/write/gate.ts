@@ -46,6 +46,9 @@
  * видит человек против того, что увидит запись.
  */
 
+import { interfaceLanguage } from "../render/defaults";
+import { fill, panelWords, type PassWords } from "../ui/words";
+
 /** Пускать ли запись — и если нет, что сказать человеку. */
 export type WriteVerdict =
   | { kind: "may-write" }
@@ -83,7 +86,7 @@ export interface WriteConditions {
  * успевает. Отложились внутри обработчика — возвращаем полученный текст без
  * изменений, ни байта своего.
  */
-export function writeVerdict(conditions: WriteConditions): WriteVerdict {
+export function writeVerdict(conditions: WriteConditions, say: PassWords = panelWords(interfaceLanguage()).pass): WriteVerdict {
   const { path, onDisk, inEditor } = conditions;
   if (inEditor === undefined) return { kind: "may-write" };
   if (inEditor === onDisk) return { kind: "may-write" };
@@ -91,10 +94,6 @@ export function writeVerdict(conditions: WriteConditions): WriteVerdict {
     kind: "defer",
     reason: "dirty-buffer",
     path,
-    message:
-      `Заметка «${path}» открыта, и в ней есть несохранённые правки. Beresta не ` +
-      "пишет в неё сейчас: запись видит файл на диске, а не то, что у вас на " +
-      "экране, — ваша строка попала бы внутрь машинного блока, и он замёрз бы " +
-      "навсегда. Сохраните заметку, и выписки приедут следующим проходом.",
+    message: fill(say.noteDirty, { path }),
   };
 }

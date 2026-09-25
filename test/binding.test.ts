@@ -25,6 +25,7 @@ import {
   type BindingRow,
 } from "../src/binding/binding-view";
 import { readBookIds } from "../src/merge/frontmatter";
+import { panelWords } from "../src/ui/words";
 import { renderBookBody, wrapSection } from "../src/render/section";
 import type { Snapshot, SnapshotBook } from "../src/snapshot/model";
 
@@ -237,6 +238,7 @@ function book(uuid: string, title: string, authors: string[], total: number): Sn
     title,
     authors,
     source: undefined,
+    ownThought: undefined,
     shard: `books/${uuid}.jsonld`,
     total,
     removedTotal: 0,
@@ -304,6 +306,9 @@ const SNAPSHOT: Snapshot = {
 };
 
 // MARK: - Подбор кандидатов
+
+/** Слова экрана проверяются русскими — их писал владелец; английские — в `panel-language`. */
+const RU = panelWords("ru");
 
 describe("подбор кандидатов", () => {
   test("три расхождения имени владельца находятся", () => {
@@ -629,7 +634,7 @@ describe("заметка для книги без кандидата", () => {
 describe("экран привязки", () => {
   test("показывает название, число выписок, машинных помечает, «создать новую» предлагает", () => {
     const plan = planBinding(SNAPSHOT, VAULT);
-    const screen = describePlan(plan).join("\n");
+    const screen = describePlan(plan, RU).join("\n");
     expect(screen).toContain("Building a Second Brain: A Proven Method");
     expect(screen).toContain("47 выписок");
     expect(screen).toContain("похоже на машинный экспорт");
@@ -641,14 +646,14 @@ describe("экран привязки", () => {
   test("у BASB на экране четыре кандидата и три пометки", () => {
     const plan = planBinding(SNAPSHOT, VAULT);
     const row = plan.awaitingUser.find((r) => r.bookUUID === BASB.uuid)!;
-    const lines = describePlan({ ...plan, awaitingUser: [row], alreadyBound: [] });
+    const lines = describePlan({ ...plan, awaitingUser: [row], alreadyBound: [] }, RU);
     expect(lines.filter((line) => line.includes("похоже на машинный экспорт"))).toHaveLength(3);
   });
 
   test("подсказка по одному автору называет себя подсказкой", () => {
     const plan = planBinding(SNAPSHOT, VAULT);
     const row = plan.awaitingUser.find((r) => r.bookUUID === BASB.uuid)!;
-    const lines = describePlan({ ...plan, awaitingUser: [row], alreadyBound: [] });
+    const lines = describePlan({ ...plan, awaitingUser: [row], alreadyBound: [] }, RU);
     const translation = lines.find((line) => line.includes("Создай Свой"))!;
     expect(translation).toContain("совпал только автор — возможно, другая книга");
     // А совпавшие названием себя подсказками не называют.
@@ -657,7 +662,7 @@ describe("экран привязки", () => {
 
   test("число выписок склоняется, а не приписывается", () => {
     const plan = planBinding(SNAPSHOT, VAULT);
-    const screen = describePlan(plan).join("\n");
+    const screen = describePlan(plan, RU).join("\n");
     expect(screen).toContain("81 выписка");
     expect(screen).toContain("47 выписок");
     expect(screen).toContain("2 выписки");
@@ -974,8 +979,8 @@ describe("экран привязки: сигнал отдельно от шум
 
   test("кнопка называет, сколько заметок под ней и почему они там", () => {
     const { weak } = groupCandidates(rowOf(BASB.uuid).candidates);
-    expect(moreCandidatesWords(weak)).toBe("Показать ещё 1 заметку со слабым совпадением");
-    expect(moreCandidatesWords([...weak, ...weak, ...weak])).toBe(
+    expect(moreCandidatesWords(weak, RU)).toBe("Показать ещё 1 заметку со слабым совпадением");
+    expect(moreCandidatesWords([...weak, ...weak, ...weak], RU)).toBe(
       "Показать ещё 3 заметки со слабым совпадением",
     );
   });
@@ -984,16 +989,16 @@ describe("экран привязки: сигнал отдельно от шум
   // «не нашлось» и «не искали».
   test("пустота объясняет себя, а не молчит", () => {
     const empty = rowOf(BOOKS[3]!.uuid);
-    expect(nothingFoundWords(empty)).toBe(
+    expect(nothingFoundWords(empty, RU)).toBe(
       "Ни одной заметки с этим названием или автором в хранилище не нашлось.",
     );
-    expect(nothingFoundWords(rowOf(BASB.uuid))).toBeUndefined();
+    expect(nothingFoundWords(rowOf(BASB.uuid), RU)).toBeUndefined();
 
     const onlyAuthor: BindingRow = {
       ...empty,
       candidates: candidates({ title: "Другая книга", authors: ["Максим Дорофеев"] }, VAULT),
     };
-    expect(nothingFoundWords(onlyAuthor)).toBe(
+    expect(nothingFoundWords(onlyAuthor, RU)).toBe(
       "Заметки с таким названием не нашлось — есть только слабые совпадения.",
     );
   });
@@ -1028,15 +1033,15 @@ describe("экран привязки: сигнал отдельно от шум
 
   // Вырежьте склонение из `bookSubtitle` — тест обязан упасть.
   test("число выписок склоняется в самом окне, а не только в описании", () => {
-    expect(bookSubtitle(rowOf(JEDI.uuid))).toBe("Максим Дорофеев · 81 выписка");
-    expect(bookSubtitle(rowOf(BASB.uuid))).toBe("Tiago Forte · 47 выписок");
-    expect(bookSubtitle(rowOf(BOOKS[6]!.uuid))).toBe("Marshall Goldsmith, Mark Reiter · 4 выписки");
-    expect(bookSubtitle(rowOf(BOOKS[8]!.uuid))).toBe("Брайан Моран, Майкл Леннингтон · 1 выписка");
+    expect(bookSubtitle(rowOf(JEDI.uuid), RU)).toBe("Максим Дорофеев · 81 выписка");
+    expect(bookSubtitle(rowOf(BASB.uuid), RU)).toBe("Tiago Forte · 47 выписок");
+    expect(bookSubtitle(rowOf(BOOKS[6]!.uuid), RU)).toBe("Marshall Goldsmith, Mark Reiter · 4 выписки");
+    expect(bookSubtitle(rowOf(BOOKS[8]!.uuid), RU)).toBe("Брайан Моран, Майкл Леннингтон · 1 выписка");
   });
 
   // Вырежьте `screenIntro` из окна — экран снова не скажет, зачем он.
   test("вверху сказано, что это за экран и что будет после нажатия", () => {
-    const intro = screenIntro(plan).join(" ");
+    const intro = screenIntro(plan, RU).join(" ");
     expect(intro).toContain("10 книг");
     expect(intro).toContain("Beresta не знает, куда их класть");
     expect(intro).toContain("ваш собственный текст останется нетронутым");
@@ -1046,10 +1051,10 @@ describe("экран привязки: сигнал отдельно от шум
   });
 
   test("счётчик внизу считает выбранное, а не обещает", () => {
-    expect(chosenCountWords(0, 10)).toBe("Пока не выбрано ничего");
-    expect(chosenCountWords(1, 10)).toBe("Выбрано 1 книга из 10");
-    expect(chosenCountWords(2, 10)).toBe("Выбрано 2 книги из 10");
-    expect(chosenCountWords(5, 10)).toBe("Выбрано 5 книг из 10");
+    expect(chosenCountWords(0, 10, RU)).toBe("Пока не выбрано ничего");
+    expect(chosenCountWords(1, 10, RU)).toBe("Выбрано 1 книга из 10");
+    expect(chosenCountWords(2, 10, RU)).toBe("Выбрано 2 книги из 10");
+    expect(chosenCountWords(5, 10, RU)).toBe("Выбрано 5 книг из 10");
   });
 });
 
@@ -1071,7 +1076,7 @@ describe("ответ на «Привязать выбранные»", () => {
       written: [{ path: "Библиотека/Attention Capital. How Focus Compounds.md", quotes: 40 }],
       deferred: [],
       failed: [],
-    });
+    }, RU);
     expect(words.head).toBe("Beresta: привязана 1 книга, 40 выписок легли в заметку:");
     expect(words.notes).toEqual([
       {
@@ -1092,7 +1097,7 @@ describe("ответ на «Привязать выбранные»", () => {
       ],
       deferred: [],
       failed: [],
-    });
+    }, RU);
     expect(words.head).toBe("Beresta: привязано 3 книги, 129 выписок легли в 3 заметки:");
     expect(words.notes.map((one) => one.tail)).toEqual([
       "— 81 выписка",
@@ -1115,7 +1120,7 @@ describe("ответ на «Привязать выбранные»", () => {
       written: [],
       deferred: ["Библиотека/Ремесло внимания.md"],
       failed: [],
-    });
+    }, RU);
     expect(words.head).toContain("выписки не легли");
     expect(words.head).toContain("несохранёнными правками");
     expect(words.head).toContain("выберите заново");
@@ -1128,7 +1133,7 @@ describe("ответ на «Привязать выбранные»", () => {
       written: [{ path: "Библиотека/Ремесло внимания.md", quotes: 81 }],
       deferred: ["Библиотека/Тихая инженерия.md"],
       failed: ["Библиотека/Порт и причал.md"],
-    });
+    }, RU);
     expect(words.head).toBe("Beresta: привязано 3 книги, 81 выписка легла в заметку:");
     expect(words.rest[0]).toContain("Ещё 1 заметка открыта с несохранёнными правками");
     expect(words.rest[1]).toContain("Ещё от 1 заметки проход отказался");
@@ -1140,13 +1145,13 @@ describe("ответ на «Привязать выбранные»", () => {
       written: [],
       deferred: [],
       failed: ["Библиотека/Порт и причал.md", "Библиотека/Заработанный час.md"],
-    });
+    }, RU);
     expect(words.head).toContain("проход отказался от 2 заметок");
     expect(words.head).toContain("Причина — отдельным сообщением");
   });
 
   test("выбор принят, но менять было нечего — сказано и это", () => {
-    const words = bindingNoticeWords({ chosen: 1, written: [], deferred: [], failed: [] });
+    const words = bindingNoticeWords({ chosen: 1, written: [], deferred: [], failed: [] }, RU);
     expect(words.head).toBe(
       "Beresta: выбор принят, но ни одна заметка не изменилась: эти выписки в них уже стоят.",
     );

@@ -78,11 +78,23 @@
  * задаче 14 — своей парой маркеров на книгу либо телом без заголовка.
  */
 
+import { interfaceLanguage } from "../render/defaults";
+import { panelWords, type PassWords } from "../ui/words";
+import { noteWords } from "../render/words";
 import { sha256Hex } from "../snapshot/sha256";
 import { ANCHOR_LINE } from "./zones";
 
-/** Начало нашего предупреждения о расхождении. По нему же оно и опознаётся. */
-export const WARNING_HEAD = "> [!warning]- Beresta: в приложении текст изменился";
+/**
+ * Начало нашего предупреждения о расхождении — на языке интерфейса.
+ *
+ * ⚠️ **Опознаётся оно НЕ этой строкой, а `WARNING_LINE` ниже** — только по
+ * латинской голове коллаута. Так и надо: опознавай мы предупреждение по его
+ * переводу, и у человека, сменившего язык Obsidian, прежнее предупреждение
+ * перестало бы сниматься — они пошли бы накапливаться по одному за проход.
+ */
+export function warningHead(language: string = interfaceLanguage()): string {
+  return `> [!warning]- Beresta: ${noteWords(language).appChanged}`;
+}
 
 const WARNING_LINE = /^>[\t ]*\[!warning\]-[\t ]*Beresta/;
 const BLANK_LINE = /^[\t \r]*$/;
@@ -150,6 +162,14 @@ export interface FuseInput {
   readonly known: KnownSection;
   /** Якоря, найденные в зоне человека: цитату оттуда не возвращаем. */
   readonly outside: ReadonlySet<string>;
+  /**
+   * Язык слов предупреждения о расхождении — тот же, что у отрисовки.
+   *
+   * Отсутствует — берётся язык интерфейса. Вход, а не чтение настроек внутри,
+   * по тому же доводу, что и в `RenderOptions`: сплав обязан давать те же байты
+   * от тех же данных.
+   */
+  readonly language?: string;
 }
 
 export interface FuseResult {
@@ -211,7 +231,37 @@ export function splitInner(lines: readonly string[]): InnerSplit {
   return { head, blocks, tail: trimBlank(lines.slice(start)) };
 }
 
-/** Собирает середину обратно: части через одну пустую строку. */
+/**
+ * Собирает середину обратно: части через одну пустую строку, и пустая строка
+ * в конце.
+ *
+ * ⚠️ **Последняя пустая строка — не украшение, а починка видимого дефекта**
+ * (замер на живом Obsidian 20260925, демо-стенд). Секция кончается якорем
+ * `^hl-…`, и без пустой строки он прилипал к закрывающему маркеру:
+ *
+ *     ^hl-9b7c30a5…
+ *     %% beresta:end %%
+ *
+ * Две строки подряд — это ОДИН абзац, а якорь считается якорем только когда
+ * стоит в абзаце один. Поэтому последний якорь каждой секции показывался
+ * человеку в режиме чтения обычным текстом — мусорной строкой из тридцати
+ * пяти знаков под последней цитатой, в каждой заметке. Остальные якоря вели
+ * себя правильно: за ними шла пустая строка.
+ *
+ * Замер прямой: та же заметка со вставленной пустой строкой — видимых якорей
+ * 0 вместо 1, служебные строки и маркеры как были невидимы, так и остались.
+ *
+ * ⚠️ **Пустая строка ставится ЗДЕСЬ, а не при сборке файла в `merge`.**
+ * `merge` сравнивает прежнюю середину с новой, чтобы не переписывать заметку
+ * зря; допиши строку мимо этого сравнения — и середина расходилась бы с
+ * файлом КАЖДЫЙ проход, то есть заметка переписывалась бы и `beresta-last-sync`
+ * прыгал бы на ровном месте. Пустая строка внутри середины переживает разбор
+ * (`splitInner` уносит её в хвост, `trimBlank` снимает) и ставится заново —
+ * значит три прохода подряд по-прежнему не меняют ни байта.
+ *
+ * У пустой секции хвоста нет: `%% beresta:begin %%` и `%% beresta:end %%`
+ * остаются соседними строками.
+ */
 export function assembleInner(split: InnerSplit): string[] {
   const parts = [split.head, ...split.blocks.map((block) => block.lines), split.tail].filter(
     (part) => part.length > 0,
@@ -221,6 +271,7 @@ export function assembleInner(split: InnerSplit): string[] {
     if (index > 0) lines.push("");
     lines.push(...part);
   });
+  if (lines.length > 0) lines.push("");
   return lines;
 }
 
@@ -331,6 +382,8 @@ function printed(block: Block): Block {
  */
 export function fuse(input: FuseInput): FuseResult {
   const { previous, rendered, known, outside } = input;
+  const warning = warningHead(input.language ?? interfaceLanguage());
+  const say = panelWords(input.language ?? interfaceLanguage()).pass;
 
   const conflicts: MergeConflict[] = [];
   const removed: string[] = [];
@@ -359,9 +412,7 @@ export function fuse(input: FuseInput): FuseResult {
     conflicts.push({
       anchor: "",
       kind: "head",
-      message:
-        "Заголовок секции Beresta переписан вами — он остаётся вашим и больше не " +
-        "обновляется. Цитаты под ним приезжают по-прежнему.",
+      message: say.headRewritten,
     });
   }
 
@@ -392,9 +443,7 @@ export function fuse(input: FuseInput): FuseResult {
       conflicts.push({
         anchor: block.anchor,
         kind: "gone-in-app",
-        message:
-          "В приложении этой выписки больше нет, но в заметке она ваша — правленая. " +
-          "Блок остаётся на месте.",
+        message: say.goneInApp,
       });
     }
   };
@@ -423,7 +472,7 @@ export function fuse(input: FuseInput): FuseResult {
     paired.add(next.anchor);
     if (!done.has(at)) {
       done.add(at);
-      fusePair(previous.blocks[at], next, known, nextBlocks, out, conflicts);
+      fusePair(previous.blocks[at], next, known, nextBlocks, out, conflicts, warning, say);
     }
     if (at >= flushed) flushed = at + 1;
   }
@@ -452,6 +501,8 @@ function fusePair(
   nextBlocks: Record<string, string>,
   out: Block[],
   conflicts: MergeConflict[],
+  warning: string,
+  say: PassWords,
 ): void {
   const marked = markOf(previous.anchor, previous.lines);
   const remembered = known.blocks[previous.anchor];
@@ -468,26 +519,20 @@ function fusePair(
     conflicts.push({
       anchor: previous.anchor,
       kind: "unknown-origin",
-      message:
-        "Этот блок Beresta не помнит: ни своей пометки при нём, ни записи в памяти " +
-        "(его писала сборка плагина до 20260901, а память с тех пор потерялась). Пока " +
-        "не помнит — не трогает.",
+      message: say.unknownOrigin,
     });
     return;
   }
 
   const changedInApp = !asWritten(marked, remembered, next.lines);
   const lines = changedInApp
-    ? withPrint(marked, [...warningFor(next), "", ...marked.body])
+    ? withPrint(marked, [...warningFor(next, warning), "", ...marked.body])
     : withPrint(marked, marked.body);
   out.push({ anchor: previous.anchor, lines });
   conflicts.push({
     anchor: previous.anchor,
     kind: changedInApp ? "edited-and-changed" : "edited",
-    message: changedInApp
-      ? "Блок правили вы, и в приложении текст тоже изменился. Ваш текст остаётся, " +
-        "новая версия — в свёрнутом предупреждении над ним."
-      : "Блок правили вы — он остаётся вашим и больше не перерисовывается.",
+    message: changedInApp ? say.editedAndChanged : say.edited,
   });
 }
 
@@ -502,9 +547,9 @@ function fusePair(
  * следующий блок при разборе. Сверху обе беды отпадают, а свёрнутый коллаут
  * `[!warning]-` виден одной строкой и разворачивается по нажатию.
  */
-function warningFor(next: Block): string[] {
+function warningFor(next: Block, warning: string): string[] {
   const body = trimBlank(next.lines.slice(0, -1));
-  return [WARNING_HEAD, ...body.map((line) => (BLANK_LINE.test(line) ? ">" : `> ${line}`))];
+  return [warning, ...body.map((line) => (BLANK_LINE.test(line) ? ">" : `> ${line}`))];
 }
 
 /**

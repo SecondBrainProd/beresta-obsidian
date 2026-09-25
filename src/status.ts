@@ -18,7 +18,9 @@
  * входом. Поэтому все слова проверяются обычным тестом, а не подгонкой часов.
  */
 
+import { interfaceLanguage } from "./render/defaults";
 import type { SnapshotHealth } from "./settings";
+import { counted, fill, panelWords, type PanelWords } from "./ui/words";
 
 /** Что показывать. Собирается тем, кто гоняет проход. */
 export interface StatusState {
@@ -77,11 +79,15 @@ export const EMPTY_STATUS: StatusState = {
  *
  * Пример на живых данных: `Beresta: данные на 20260806 21:14 · 2 ваши правки`.
  */
-export function statusLine(state: StatusState): string {
-  const parts: string[] = [head(state)];
-  if (state.conflicts > 0) parts.push(`${state.conflicts} ${own(state.conflicts)}`);
-  if (state.deferred > 0) parts.push(`${state.deferred} ${waiting(state.deferred)} сохранения`);
-  if (state.problems > 0) parts.push(`${state.problems} ${books(state.problems)} ещё едет`);
+export function statusLine(
+  state: StatusState,
+  words: PanelWords = panelWords(interfaceLanguage()),
+): string {
+  const say = words.status.line;
+  const parts: string[] = [head(state, words)];
+  if (state.conflicts > 0) parts.push(counted(words, state.conflicts, say.ownEdits));
+  if (state.deferred > 0) parts.push(counted(words, state.deferred, say.waitingToSave));
+  if (state.problems > 0) parts.push(counted(words, state.problems, say.booksStillArriving));
   return `Beresta: ${parts.join(" · ")}`;
 }
 
@@ -92,27 +98,23 @@ export function statusLine(state: StatusState): string {
  * Отставание — единственное, чего не видно из самой отметки, и именно оно
  * бывает молчаливым.
  */
-export function statusHint(state: StatusState, now: number, offsetMinutes: number): string[] {
+export function statusHint(
+  state: StatusState,
+  now: number,
+  offsetMinutes: number,
+  words: PanelWords = panelWords(interfaceLanguage()),
+): string[] {
+  const say = words.status.hint;
   const lines: string[] = [];
   switch (state.snapshot) {
     case "нет":
-      lines.push(
-        "Выгрузки Beresta в этом хранилище ещё нет. Приложение пишет её само; " +
-          "заметки до тех пор не трогаются.",
-      );
+      lines.push(say.noExport);
       break;
     case "не-читается":
-      lines.push(
-        "Указатель выгрузки не разбирается. Заметки не трогаются, пока он не " +
-          "станет читаемым — обычно это лечится следующей выгрузкой из приложения.",
-      );
+      lines.push(say.unreadable);
       break;
     case "наполовину":
-      lines.push(
-        "Выгрузка доехала не целиком — так выглядит хранилище посреди " +
-          "синхронизации. Плагин смотрит снова и доложит книги, как только они " +
-          "появятся.",
-      );
+      lines.push(say.halfway);
       break;
     case "целый":
     case "неизвестно":
@@ -120,29 +122,15 @@ export function statusHint(state: StatusState, now: number, offsetMinutes: numbe
   }
 
   if (state.dataStamp !== undefined) {
-    lines.push(`Данные на ${state.dataStamp}${age(state.dataStamp, now, offsetMinutes)}.`);
+    const stamp = state.dataStamp;
+    lines.push(fill(say.dataAt, { stamp, age: age(stamp, now, offsetMinutes, words) }));
   }
   if (state.notesWithQuotes > 0) {
-    lines.push(`Заметок с выписками: ${state.notesWithQuotes}.`);
+    lines.push(fill(say.notesWithQuotes, { count: state.notesWithQuotes }));
   }
-  if (state.unbound > 0) {
-    lines.push(
-      `Книг без заметки: ${state.unbound}. Им некуда лечь — команда «Привязать книги ` +
-        "к заметкам».",
-    );
-  }
-  if (state.conflicts > 0) {
-    lines.push(
-      `Ваших правок в секции: ${state.conflicts}. Эти блоки заморожены и остаются ` +
-        "вашими; список — команда «Показать расхождения Beresta».",
-    );
-  }
-  if (state.deferred > 0) {
-    lines.push(
-      `Ждут сохранения: ${state.deferred}. Заметка открыта с несохранёнными правками — ` +
-        "запись видит файл на диске, а не то, что у вас на экране.",
-    );
-  }
+  if (state.unbound > 0) lines.push(fill(say.unbound, { count: state.unbound }));
+  if (state.conflicts > 0) lines.push(fill(say.ownEdits, { count: state.conflicts }));
+  if (state.deferred > 0) lines.push(fill(say.deferred, { count: state.deferred }));
   return lines;
 }
 
@@ -172,59 +160,36 @@ export function statusHint(state: StatusState, now: number, offsetMinutes: numbe
  * **Бодрости здесь нет.** «Готово» там, где раскладывать было некуда, — хуже
  * тишины, потому что это неправда.
  */
-export function syncNowWords(state: StatusState): string {
-  if (state.snapshot === "нет") {
-    return (
-      "Beresta: выгрузки Beresta в этом хранилище нет — раскладывать нечего. " +
-      "Приложение пишет её само; заметки до тех пор не трогаются."
-    );
-  }
-  if (state.snapshot === "не-читается") {
-    return (
-      "Beresta: указатель выгрузки не разбирается — заметки не тронуты. " +
-      "Обычно это лечится следующей выгрузкой из приложения."
-    );
-  }
-  if (state.books === 0) {
-    return "Beresta: в выгрузке нет ни одной книги с выписками — раскладывать нечего.";
-  }
+export function syncNowWords(
+  state: StatusState,
+  words: PanelWords = panelWords(interfaceLanguage()),
+): string {
+  const say = words.status.syncNow;
+  if (state.snapshot === "нет") return say.noExport;
+  if (state.snapshot === "не-читается") return say.unreadable;
+  if (state.books === 0) return say.noBooks;
 
   const lines: string[] = [
-    `Beresta: в выгрузке ${state.books} ${books(state.books)}, ` +
-      `${state.quotes} ${quotes(state.quotes)}.`,
+    fill(say.inExport, {
+      books: counted(words, state.books, say.books),
+      quotes: counted(words, state.quotes, say.quotes),
+    }),
   ];
 
   if (state.notesWithQuotes === 0) {
-    lines.push("Ни в одной заметке выписок Beresta пока нет.");
+    lines.push(say.noNotesYet);
   } else {
-    lines.push(
-      `Выписки лежат в ${state.notesWithQuotes} ${notesWord(state.notesWithQuotes)}.`,
-    );
+    lines.push(counted(words, state.notesWithQuotes, say.quotesLieIn));
   }
 
   if (state.unbound === state.books) {
-    lines.push(
-      "Ни одна книга не привязана к заметке — раскладывать некуда. " +
-        "Начните с команды «Привязать книги к заметкам».",
-    );
+    lines.push(say.nothingBound);
   } else if (state.unbound > 0) {
-    lines.push(
-      `Ещё ${state.unbound} ${booksDative(state.unbound)} некуда лечь — ` +
-        "команда «Привязать книги к заметкам».",
-    );
+    lines.push(counted(words, state.unbound, say.stillUnbound));
   }
 
-  if (state.problems > 0) {
-    lines.push(
-      `Выгрузка доехала не целиком: ${state.problems} ${books(state.problems)} ещё едет.`,
-    );
-  }
-  if (state.deferred > 0) {
-    lines.push(
-      `${state.deferred} ${waiting(state.deferred)} сохранения: заметка открыта с ` +
-        "несохранёнными правками, выписки приедут, как только вы сохраните.",
-    );
-  }
+  if (state.problems > 0) lines.push(counted(words, state.problems, say.halfway));
+  if (state.deferred > 0) lines.push(counted(words, state.deferred, say.deferred));
   return lines.join("\n");
 }
 
@@ -246,20 +211,20 @@ export function fileStamp(atMs: number, offsetMinutes: number): string {
 
 // MARK: - Внутреннее
 
-function head(state: StatusState): string {
+function head(state: StatusState, words: PanelWords): string {
+  const say = words.status.head;
+  const stamp = state.dataStamp;
   switch (state.snapshot) {
     case "нет":
-      return "выгрузки ещё нет";
+      return say.noExport;
     case "не-читается":
-      return "указатель не читается";
+      return say.unreadable;
     case "неизвестно":
-      return state.dataStamp === undefined ? "смотрю" : `данные на ${state.dataStamp}`;
+      return stamp === undefined ? say.looking : fill(say.dataAt, { stamp });
     case "наполовину":
-      return state.dataStamp === undefined
-        ? "выгрузка ещё едет"
-        : `данные на ${state.dataStamp}, выгрузка ещё едет`;
+      return stamp === undefined ? say.stillArriving : fill(say.dataAtStillArriving, { stamp });
     case "целый":
-      return state.dataStamp === undefined ? "выписок нет" : `данные на ${state.dataStamp}`;
+      return stamp === undefined ? say.noQuotes : fill(say.dataAt, { stamp });
   }
 }
 
@@ -270,11 +235,11 @@ function head(state: StatusState): string {
  * человеку ничего, чего он не знает. Больше — называем дни: именно так
  * выглядит отставание, о котором иначе никто не узнает.
  */
-function age(stamp: string, now: number, offsetMinutes: number): string {
+function age(stamp: string, now: number, offsetMinutes: number, words: PanelWords): string {
   const today = format(now, offsetMinutes, " ", false);
   const days = daysBetween(stamp, today);
   if (days === undefined || days < 1) return "";
-  return ` — это ${days} ${dayWord(days)} назад`;
+  return counted(words, days, words.status.hint.daysAgo);
 }
 
 function daysBetween(from: string, to: string): number | undefined {
@@ -302,42 +267,4 @@ function format(atMs: number, offsetMinutes: number, gap: string, seconds: boole
   const day = `${local.getUTCFullYear()}${two(local.getUTCMonth() + 1)}${two(local.getUTCDate())}`;
   const time = `${two(local.getUTCHours())}${two(local.getUTCMinutes())}`;
   return `${day}${gap}${time}${seconds ? two(local.getUTCSeconds()) : ""}`;
-}
-
-function own(count: number): string {
-  return `${plural(count, "ваша", "ваши", "ваших")} ${plural(count, "правка", "правки", "правок")}`;
-}
-
-function waiting(count: number): string {
-  return plural(count, "заметка ждёт", "заметки ждут", "заметок ждут");
-}
-
-function books(count: number): string {
-  return plural(count, "книга", "книги", "книг");
-}
-
-/** «1 книге некуда лечь», «9 книгам некуда лечь». */
-function booksDative(count: number): string {
-  return plural(count, "книге", "книгам", "книгам");
-}
-
-function quotes(count: number): string {
-  return plural(count, "выписка", "выписки", "выписок");
-}
-
-function notesWord(count: number): string {
-  return plural(count, "заметке", "заметках", "заметках");
-}
-
-function dayWord(count: number): string {
-  return plural(count, "день", "дня", "дней");
-}
-
-function plural(count: number, one: string, few: string, many: string): string {
-  const tens = count % 100;
-  if (tens >= 11 && tens <= 14) return many;
-  const ones = count % 10;
-  if (ones === 1) return one;
-  if (ones >= 2 && ones <= 4) return few;
-  return many;
 }

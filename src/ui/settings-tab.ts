@@ -54,6 +54,8 @@ import {
   type BerestaSettings,
   type NumberField,
 } from "../settings";
+import { interfaceLanguage } from "../render/defaults";
+import { panelWords, type SettingsWords } from "./words";
 
 /** Что странице нужно от плагина — и ничего больше. */
 export interface SettingsHost {
@@ -92,6 +94,11 @@ export class BerestaSettingTab extends PluginSettingTab {
     super(app, plugin);
   }
 
+  /** Слова страницы — по языку интерфейса на момент показа. */
+  private get words(): SettingsWords {
+    return panelWords(interfaceLanguage()).settings;
+  }
+
   override display(): void {
     const { containerEl } = this;
     containerEl.empty();
@@ -99,10 +106,6 @@ export class BerestaSettingTab extends PluginSettingTab {
 
     this.numberField(
       OFFSET_FIELD,
-      "Сдвиг в минутах от UTC: 300 — Караганда, 180 — Москва. Время выделения " +
-        "печатается в каждом блоке, поэтому сдвиг закреплён числом. Смените его — " +
-        "и все блоки перерисуются один раз; блоки, которые вы правили руками, " +
-        "останутся вашими.",
       () => this.host.settingsNow().timeZoneOffsetMinutes,
       (value) => ({ ...this.host.settingsNow(), timeZoneOffsetMinutes: value }),
     );
@@ -111,28 +114,18 @@ export class BerestaSettingTab extends PluginSettingTab {
 
     this.numberField(
       INTERVAL_FIELD,
-      "Секунд между взглядами, когда окно Obsidian впереди. Без фокуса Beresta " +
-        "смотрит раз в минуту. Взгляд стоит одного обращения к файлу: заметки " +
-        "трогаются, только если выгрузка изменилась.",
       () => Math.round(this.host.settingsNow().focusedIntervalMs / 1000),
       (value) => ({ ...this.host.settingsNow(), focusedIntervalMs: value * 1000 }),
     );
 
     this.numberField(
       KEEP_BACKUPS_FIELD,
-      "Beresta снимает копию заметки перед КАЖДОЙ своей записью в неё — но только " +
-        "если текст изменился с прошлой копии. Держится столько последних версий, " +
-        "сколько здесь стоит; всё, что старше, вытесняется. Копии лежат в папке " +
-        "плагина и не попадают ни в поиск, ни в граф.",
       () => this.host.settingsNow().keepBackups,
       (value) => ({ ...this.host.settingsNow(), keepBackups: value }),
     );
 
     this.numberField(
       REMOVAL_COUNT_FIELD,
-      "Если проход убирает больше этого числа блоков или больше пятой части — он " +
-        "останавливается и показывает список. Так выглядит выгрузка, приехавшая " +
-        "наполовину или с другой машины.",
       () => this.host.settingsNow().removalCount,
       (value) => ({ ...this.host.settingsNow(), removalCount: value }),
     );
@@ -155,15 +148,8 @@ export class BerestaSettingTab extends PluginSettingTab {
    */
   private templateField(): void {
     const setting = new Setting(this.containerEl)
-      .setName("Шаблон секции выписок")
-      .setDesc(
-        "Как выглядит блок одной выписки в заметке. Пусто — как у всех: " +
-          "стандартный шаблон, который будет улучшаться с новыми версиями. " +
-          "Доступные значения: {{text}}, {{comment}}, {{caption}}, {{heading}}, " +
-          "{{tags}}, {{link}}, {{page}}, {{date}}, {{color}} и другие; список " +
-          "целиком плагин покажет в ошибке, если ошибётесь в имени. " +
-          "{{anchor}} обязателен — им держится связь блока с выпиской.",
-      );
+      .setName(this.words.templateName)
+      .setDesc(this.words.templateDescription);
     const say = this.sayLine(setting);
 
     setting.addTextArea((area) => {
@@ -176,7 +162,7 @@ export class BerestaSettingTab extends PluginSettingTab {
       area.inputEl.addClass("beresta-template-area");
 
       const commit = async (): Promise<void> => {
-        const verdict = readTemplateField(area.getValue());
+        const verdict = readTemplateField(area.getValue(), this.words);
         if (verdict.kind === "ok") {
           say(verdict.said, false);
           if (verdict.value !== this.host.settingsNow().template) {
@@ -194,7 +180,7 @@ export class BerestaSettingTab extends PluginSettingTab {
     setting.addExtraButton((button) => {
       button
         .setIcon("rotate-ccw")
-        .setTooltip("Вернуть стандартный")
+        .setTooltip(this.words.resetTemplate)
         .onClick(() => {
           void this.host.save({ ...this.host.settingsNow(), template: undefined });
           this.display();
@@ -213,18 +199,18 @@ export class BerestaSettingTab extends PluginSettingTab {
 
   private numberField(
     spec: NumberField,
-    desc: string,
     read: () => number,
     write: (value: number) => BerestaSettings,
   ): void {
-    const setting = new Setting(this.containerEl).setName(spec.name).setDesc(desc);
+    const field = this.words.fields[spec.key];
+    const setting = new Setting(this.containerEl).setName(field.name).setDesc(field.description);
     const say = this.sayLine(setting);
 
     setting.addText((text) => {
       text.setValue(String(read()));
 
       const commit = async (): Promise<void> => {
-        const verdict = readNumberField(spec, text.getValue());
+        const verdict = readNumberField(spec, text.getValue(), this.words);
         if (verdict.kind === "ok") {
           say(undefined, false);
           if (verdict.value !== read()) await this.host.save(write(verdict.value));
@@ -240,7 +226,7 @@ export class BerestaSettingTab extends PluginSettingTab {
       // На каждой букве — только слова, без записи: человек видит отказ сразу,
       // а хранилище не перерисовывается на полпути к «300».
       text.onChange((typed) => {
-        const verdict = readNumberField(spec, typed);
+        const verdict = readNumberField(spec, typed, this.words);
         say(verdict.kind === "refused" ? verdict.said : undefined, true);
       });
       text.inputEl.addEventListener("blur", () => void commit());
@@ -252,15 +238,15 @@ export class BerestaSettingTab extends PluginSettingTab {
 
   private folderField(): void {
     const setting = new Setting(this.containerEl)
-      .setName("Папка для новых заметок")
-      .setDesc("Куда класть заметку книги, для которой вы выбрали «создать новую».");
+      .setName(this.words.folderName)
+      .setDesc(this.words.folderDescription);
     const say = this.sayLine(setting);
 
     setting.addText((text) => {
       text.setValue(this.host.settingsNow().libraryFolder);
 
       const commit = async (): Promise<void> => {
-        const verdict = readFolderField(text.getValue(), (path) => this.folderExists(path));
+        const verdict = readFolderField(text.getValue(), (path) => this.folderExists(path), this.words);
         if (verdict.kind === "ok") {
           say(verdict.said, false);
           if (verdict.value !== this.host.settingsNow().libraryFolder) {
@@ -274,7 +260,7 @@ export class BerestaSettingTab extends PluginSettingTab {
       this.pending.push(commit);
 
       text.onChange((typed) => {
-        const verdict = readFolderField(typed, (path) => this.folderExists(path));
+        const verdict = readFolderField(typed, (path) => this.folderExists(path), this.words);
         if (verdict.kind === "refused") say(verdict.said, true);
         else say(verdict.kind === "ok" ? verdict.said : undefined, false);
       });

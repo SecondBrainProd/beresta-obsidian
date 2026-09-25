@@ -1,3 +1,5 @@
+import { interfaceLanguage } from "../render/defaults";
+import { fill, panelWords, type PassWords } from "../ui/words";
 import { indexPath, shardFileName, shardPath } from "./paths";
 import {
   ForeignSnapshotFormat,
@@ -91,7 +93,10 @@ const ENTRY_KEYS = [
  *    целиком означал бы, что одна недосинхронизированная книга останавливает
  *    работу со всеми остальными.
  */
-export async function readSnapshot(source: SnapshotSource): Promise<Snapshot> {
+export async function readSnapshot(
+  source: SnapshotSource,
+  say: PassWords = panelWords(interfaceLanguage()).pass,
+): Promise<Snapshot> {
   const path = indexPath();
   if (!(await source.exists(path))) return { kind: "absent" };
 
@@ -99,7 +104,7 @@ export async function readSnapshot(source: SnapshotSource): Promise<Snapshot> {
   const document = asObject(parseJSON(raw, path), `${path}: указатель`);
 
   const format = requireString(document["format"], `${path}: format`);
-  if (format !== SNAPSHOT_FORMAT) throw new ForeignSnapshotFormat(format);
+  if (format !== SNAPSHOT_FORMAT) throw new ForeignSnapshotFormat(format, say);
 
   const formatVersion = optionalNumber(document["formatVersion"]);
   if (formatVersion === undefined) {
@@ -109,7 +114,7 @@ export async function readSnapshot(source: SnapshotSource): Promise<Snapshot> {
       `${path}: в указателе нет formatVersion — прочитать снимок нечем`,
     );
   }
-  if (formatVersion > SNAPSHOT_FORMAT_VERSION) throw new SnapshotTooNew(formatVersion);
+  if (formatVersion > SNAPSHOT_FORMAT_VERSION) throw new SnapshotTooNew(formatVersion, say);
 
   const header: SnapshotHeader = {
     format,
@@ -142,9 +147,7 @@ export async function readSnapshot(source: SnapshotSource): Promise<Snapshot> {
       problems.push({
         kind: "foreign-file",
         file,
-        message:
-          `Указатель снимка называет файл «${file}», который не похож на осколок ` +
-          "Beresta. Плагин его не читает: за пределы .beresta/books он не выходит.",
+        message: fill(say.snapshotForeignFile, { file }),
       });
       continue;
     }
@@ -154,9 +157,7 @@ export async function readSnapshot(source: SnapshotSource): Promise<Snapshot> {
       problems.push({
         kind: "shard-missing",
         file,
-        message:
-          `Указатель снимка называет осколок «${file}», а файла нет. Обычно так ` +
-          "выглядит хранилище посреди синхронизации: подождите и повторите.",
+        message: fill(say.snapshotShardMissing, { file }),
       });
       continue;
     }
@@ -173,9 +174,7 @@ export async function readSnapshot(source: SnapshotSource): Promise<Snapshot> {
         file,
         expected,
         actual,
-        message:
-          `Осколок «${file}» не сходится с отпечатком в указателе. Файл дописан не ` +
-          "до конца или изменён мимо Beresta — заметки по нему не обновляются.",
+        message: fill(say.snapshotChecksum, { file }),
       });
       continue;
     }
@@ -187,7 +186,7 @@ export async function readSnapshot(source: SnapshotSource): Promise<Snapshot> {
       problems.push({
         kind: "shard-unreadable",
         file,
-        message: `Осколок «${file}» не разбирается: ${(error as Error).message}`,
+        message: fill(say.snapshotUnreadable, { file, reason: (error as Error).message }),
       });
       continue;
     }
@@ -203,6 +202,7 @@ export async function readSnapshot(source: SnapshotSource): Promise<Snapshot> {
       title: parsed.title,
       authors: parsed.authors,
       source: parsed.source,
+      ownThought: parsed.ownThought,
       shard: name,
       total: optionalNumber(entry["total"]) ?? parsed.annotations.length,
       removedTotal: optionalNumber(entry["removedTotal"]) ?? parsed.tombstones.length,

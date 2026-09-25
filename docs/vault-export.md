@@ -179,7 +179,7 @@ jq 'keys, (.books[0] | keys), (.books | length), ([.books[].total] | add)' \
 | `first` | Страница целиком, вложенная (`AnnotationPage`). **Ключа нет вовсе**, если живых выписок ноль: стандарт запрещает пустую страницу (раздел 5.2) |
 | `last` | Адрес той же страницы. Нет, когда нет `first` |
 | `generated` | Момент данных — то же, что `updatedAt` записи указателя |
-| `beresta:book` | Книга: `id` (`urn:uuid:`), `type` (`Text`), `label` (название), `beresta:authors` (список имён по порядку), `beresta:sourceURL` (адрес первоисточника — у статей) |
+| `beresta:book` | Книга: `id` (`urn:uuid:`), `type` (`Text`), `label` (название), `beresta:authors` (список имён по порядку), `beresta:sourceURL` (адрес первоисточника — у статей), `beresta:ownThought` (мысль человека о книге целиком) |
 | `beresta:removed` | Надгробия. См. [Надгробия](#надгробия-и-их-срок-жизни). Ключа нет, если удалённых выписок нет |
 
 Страница (`first`) — четыре ключа плюс тип: `id`, `type` (`AnnotationPage`),
@@ -218,9 +218,10 @@ jq 'keys, (.books[0] | keys), (.books | length), ([.books[].total] | add)' \
 
 | Поле | Где стоит | Что означает |
 |---|---|---|
-| `beresta:book` | собрание | Книга собрания: `id`, `type`, `label`, `beresta:authors`, `beresta:sourceURL` |
+| `beresta:book` | собрание | Книга собрания: `id`, `type`, `label`, `beresta:authors`, `beresta:sourceURL`, `beresta:ownThought` |
 | `beresta:authors` | внутри `beresta:book` | Авторы по порядку. Порядок значащий — отсюда `@list` в словаре |
 | `beresta:sourceURL` | внутри `beresta:book` | Адрес первоисточника — у статей. У книги поля нет вовсе: пустая строка означала бы «адрес есть, но пуст». Года издания у статьи нет, а часть их без автора, и адрес — единственное, чем цитата из статьи перестаёт быть цитатой ниоткуда |
+| `beresta:ownThought` | внутри `beresta:book` | **Мысль ЧЕЛОВЕКА о книге целиком** (формат базы 1.17). ⚠️ Не описание издателя: того в снимке нет вовсе — чужой текст, приехавший с книгой, в заметке человека не нужен. Пусто — поля нет вовсе, по тому же правилу, что у адреса выше. Плагин рисует её под заголовком секции, ДО цитат: мысль о книге про книгу целиком, а цитаты про места в ней |
 | `beresta:removed` | собрание | Надгробия мягко удалённых выписок |
 | `beresta:deletedAt` | внутри `beresta:removed` | Момент мягкого удаления, ISO 8601 |
 | `beresta:type` | выписка | Вид пометки: `highlight`, `underline`, `note`, `text`, `area`, `ink`. В модели W3C ему места нет: `motivation` отвечает на другой вопрос, и `highlight` с `underline` схлопнулись бы в один `highlighting` |
@@ -560,7 +561,7 @@ The top level is a collection (`AnnotationCollection`):
 | `first` | The page, embedded whole (`AnnotationPage`). **The key is absent** when there are no live highlights: the standard forbids an empty page (section 5.2) |
 | `last` | The IRI of that same page. Absent when `first` is absent |
 | `generated` | The data's moment — the same as `updatedAt` in the index entry |
-| `beresta:book` | The book: `id` (`urn:uuid:`), `type` (`Text`), `label` (title), `beresta:authors` (names in order), `beresta:sourceURL` (the address of the original — for articles) |
+| `beresta:book` | The book: `id` (`urn:uuid:`), `type` (`Text`), `label` (title), `beresta:authors` (names in order), `beresta:sourceURL` (the address of the original — for articles), `beresta:ownThought` (the reader's own thought about the whole book) |
 | `beresta:removed` | Tombstones. See [Tombstones](#tombstones-and-how-long-they-live). The key is absent when nothing was deleted |
 
 The page (`first`) has four keys plus its type: `id`, `type` (`AnnotationPage`),
@@ -603,6 +604,7 @@ Fifteen names, and that is the whole list. The `beresta:` prefix expands to
 | `beresta:book` | collection | The collection's book: `id`, `type`, `label`, `beresta:authors`, `beresta:sourceURL` |
 | `beresta:authors` | inside `beresta:book` | Authors in order. The order matters — hence `@list` in the vocabulary |
 | `beresta:sourceURL` | inside `beresta:book` | The address of the original — present for articles. A book has no such field at all: an empty string would mean "there is an address, and it is empty". An article has no publication year and some have no author, so the address is the only thing that keeps a quote from an article from being a quote out of nowhere |
+| `beresta:ownThought` | inside `beresta:book` | **The reader's own thought about the whole book** (database format 1.17). ⚠️ Not the publisher's blurb: that is absent from the snapshot entirely — someone else's text that came with the book has no place in a person's note. Empty means the field is absent, by the same rule as the address above. The plugin renders it under the section heading, BEFORE the quotes: a thought about the book is about the whole book, quotes are about places in it |
 | `beresta:removed` | collection | Tombstones of softly deleted highlights |
 | `beresta:deletedAt` | inside `beresta:removed` | The moment of soft deletion, ISO 8601 |
 | `beresta:type` | highlight | The kind of mark: `highlight`, `underline`, `note`, `text`, `area`, `ink`. The W3C model has no place for it: `motivation` answers a different question, and `highlight` and `underline` would collapse into one `highlighting` |

@@ -11,6 +11,7 @@ import {
   OFFSET_FIELD,
   REMOVAL_COUNT_FIELD,
 } from "../src/settings";
+import { panelWords } from "../src/ui/words";
 
 // Текст приложения про настройки плагина — против самих настроек плагина.
 //
@@ -52,13 +53,14 @@ describe.skipIf(!IN_MONOREPO)("Текст приложения про настр
   test("каждая настройка плагина в тексте упомянута", () => {
     // Ключевое слово имени, по которому настройку узнаёт человек. Не всё имя:
     // текст пересказывает, а не цитирует.
+    const RU = panelWords("ru").settings;
     const settings: Array<{ what: string; keyword: string }> = [
       { what: "шаблон секции выписок", keyword: "шаблон" },
       { what: "папка для новых заметок", keyword: "папка" },
-      { what: OFFSET_FIELD.name, keyword: "часовой пояс" },
-      { what: INTERVAL_FIELD.name, keyword: "как часто" },
-      { what: KEEP_BACKUPS_FIELD.name, keyword: "версий" },
-      { what: REMOVAL_COUNT_FIELD.name, keyword: "предохранитель" },
+      { what: RU.fields[OFFSET_FIELD.key].name, keyword: "часовой пояс" },
+      { what: RU.fields[INTERVAL_FIELD.key].name, keyword: "как часто" },
+      { what: RU.fields[KEEP_BACKUPS_FIELD.key].name, keyword: "версий" },
+      { what: RU.fields[REMOVAL_COUNT_FIELD.key].name, keyword: "предохранитель" },
     ];
 
     const note = appNote();

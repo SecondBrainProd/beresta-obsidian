@@ -17,6 +17,9 @@
  * за истину.
  */
 
+import { interfaceLanguage } from "../render/defaults";
+import { fill, panelWords, type PassWords } from "../ui/words";
+
 /** Разобранное значение JSON — всё, что может прийти из файла. */
 export type JsonValue =
   | string
@@ -128,6 +131,15 @@ export interface SnapshotBook {
   authors: string[];
   /** Адрес первоисточника — у статей. У книги его нет. */
   source: string | undefined;
+  /**
+   * Мысль ЧЕЛОВЕКА о книге целиком (формат базы 1.17).
+   *
+   * ⚠️ Не описание издателя — того в снимке нет вовсе: чужой текст, приехавший
+   * с книгой, в заметке человека не нужен. Здесь то, что человек написал сам.
+   *
+   * Пусто — поля в осколке нет вовсе, и здесь `undefined`.
+   */
+  ownThought: string | undefined;
   /** Имя осколка внутри `books/`. */
   shard: string;
   /** Живых выписок по указателю. Сверяется с разобранным осколком. */
@@ -206,12 +218,8 @@ export class SnapshotTooNew extends Error {
   readonly formatVersion: number;
   readonly supported: number;
 
-  constructor(formatVersion: number) {
-    super(
-      `Снимок Beresta собран форматом версии ${formatVersion}, а этот плагин ` +
-        `понимает ${SNAPSHOT_FORMAT_VERSION}. Обновите плагин — читать снимок ` +
-        "наугад нельзя: заметки заполнились бы половиной данных.",
-    );
+  constructor(formatVersion: number, say: PassWords = panelWords(interfaceLanguage()).pass) {
+    super(fill(say.snapshotTooNew, { version: formatVersion, supported: SNAPSHOT_FORMAT_VERSION }));
     this.name = "SnapshotTooNew";
     this.formatVersion = formatVersion;
     this.supported = SNAPSHOT_FORMAT_VERSION;
@@ -222,11 +230,8 @@ export class SnapshotTooNew extends Error {
 export class ForeignSnapshotFormat extends Error {
   readonly format: string;
 
-  constructor(format: string) {
-    super(
-      `Файл .beresta/index.json называет себя форматом «${format}», а не ` +
-        `«${SNAPSHOT_FORMAT}». Это чужой файл: плагин его не трогает.`,
-    );
+  constructor(format: string, say: PassWords = panelWords(interfaceLanguage()).pass) {
+    super(fill(say.snapshotForeign, { format, expected: SNAPSHOT_FORMAT }));
     this.name = "ForeignSnapshotFormat";
     this.format = format;
   }

@@ -36,6 +36,8 @@
  * памяти есть и признак `whole`: снимок разложен целиком или ещё нет.
  */
 
+import { interfaceLanguage } from "./render/defaults";
+import { panelWords, type PassWords } from "./ui/words";
 import { readSnapshot, type Snapshot, type SnapshotSource } from "./snapshot";
 import { indexPath } from "./snapshot/paths";
 import { sha256Hex } from "./snapshot/sha256";
@@ -111,6 +113,7 @@ export async function lookAtSnapshot(
   source: WatchSource,
   memory: WatchMemory,
   reason: LookReason,
+  say: PassWords = panelWords(interfaceLanguage()).pass,
 ): Promise<Look> {
   const path = indexPath();
   const hint = await source.stat(path);
@@ -163,7 +166,7 @@ export async function lookAtSnapshot(
 
   let snapshot: Snapshot;
   try {
-    snapshot = await readSnapshot(withIndexBytes(source, path, bytes));
+    snapshot = await readSnapshot(withIndexBytes(source, path, bytes), say);
   } catch (error) {
     return {
       kind: "не-читается",

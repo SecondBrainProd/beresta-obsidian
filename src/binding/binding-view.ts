@@ -27,13 +27,18 @@
 
 import { readBookIds } from "../merge/frontmatter";
 import type { Snapshot, SnapshotBook } from "../snapshot/model";
+import { interfaceLanguage } from "../render/defaults";
+import { counted, fill, panelWords, type PanelWords } from "../ui/words";
 import { bookQuery, candidates, identify, type Candidate, type VaultNote } from "./candidates";
 
 /**
  * Папка для заметок, которых ещё нет.
  *
  * Значение по умолчанию, а не константа поведения: настройка задачи 14 отдаёт
- * его наружу. Здесь оно названо так, как сложилось у владельца.
+ * его наружу. Здесь оно названо так, как сложилось у владельца; настоящее
+ * умолчание продукта — по языку интерфейса при первом запуске
+ * (`initialState`, словарь панелей), а эта константа осталась плечом для
+ * проверок экрана привязки.
  */
 export const DEFAULT_LIBRARY_FOLDER = "Base/Библиотека";
 
@@ -234,32 +239,33 @@ export function newNotePath(title: string, folder: string): string {
  * командами; здесь оно было бы вторым Obsidian, написанным нами и всегда с
  * нами согласным.
  */
-export function describePlan(plan: BindingPlan): string[] {
-  const lines: string[] = [...screenIntro(plan)];
+export function describePlan(plan: BindingPlan, words: PanelWords = panelWords(interfaceLanguage())): string[] {
+  const say = words.binding;
+  const lines: string[] = [...screenIntro(plan, words)];
   for (const row of plan.awaitingUser) {
-    lines.push(`«${row.title}» — ${bookSubtitle(row)}`);
+    lines.push(`«${row.title}» — ${bookSubtitle(row, words)}`);
 
-    const said = nothingFoundWords(row);
+    const said = nothingFoundWords(row, words);
     if (said !== undefined) lines.push(`    ${said}`);
 
     const { likely, weak } = groupCandidates(row.candidates);
     let number = 0;
     for (const candidate of likely) {
       number += 1;
-      lines.push(`    ${number}. ${candidate.path}${whyTail(candidate)}`);
+      lines.push(`    ${number}. ${candidate.path}${whyTail(candidate, words)}`);
     }
     if (weak.length > 0) {
-      lines.push(`    ▸ ${moreCandidatesWords(weak)}`);
+      lines.push(`    ▸ ${moreCandidatesWords(weak, words)}`);
       for (const candidate of weak) {
         number += 1;
-        lines.push(`      ${number}. ${candidate.path}${whyTail(candidate)}`);
+        lines.push(`      ${number}. ${candidate.path}${whyTail(candidate, words)}`);
       }
     }
 
     const action = newNoteAction(row);
-    if (action.kind === "create") lines.push(`    + создать новую: ${action.path}`);
-    if (action.kind === "bind") lines.push(`    + дописать в существующую: ${action.path}`);
-    lines.push("    + пропустить");
+    if (action.kind === "create") lines.push(`    ${fill(say.planCreate, { path: action.path })}`);
+    if (action.kind === "bind") lines.push(`    ${fill(say.planBind, { path: action.path })}`);
+    lines.push(`    ${say.planSkip}`);
   }
   return lines;
 }
@@ -275,18 +281,17 @@ export function describePlan(plan: BindingPlan): string[] {
  * подсказка не выбрасывается и не выдаётся за совпадение названия — она
  * называет себя тем, что она есть.
  */
-export function whyCandidate(candidate: Candidate): string[] {
+export function whyCandidate(candidate: Candidate, words: PanelWords = panelWords(interfaceLanguage())): string[] {
+  const say = words.binding;
   const notes: string[] = [];
-  if (candidate.authorOnly) notes.push("совпал только автор — возможно, другая книга");
-  if (candidate.headingOnly) {
-    notes.push("название книги стоит только заголовком раздела внутри заметки");
-  }
-  if (candidate.machineGenerated) notes.push("похоже на машинный экспорт");
+  if (candidate.authorOnly) notes.push(say.whyAuthorOnly);
+  if (candidate.headingOnly) notes.push(say.whyHeadingOnly);
+  if (candidate.machineGenerated) notes.push(say.whyMachine);
   return notes;
 }
 
-function whyTail(candidate: Candidate): string {
-  const notes = whyCandidate(candidate);
+function whyTail(candidate: Candidate, words: PanelWords): string {
+  const notes = whyCandidate(candidate, words);
   return notes.length === 0 ? "" : `  — ${notes.join("; ")}`;
 }
 
@@ -343,8 +348,8 @@ export function newNoteAction(row: BindingRow): NewNoteAction {
 }
 
 /** Подпись под названием книги: автор и число выписок — со склонением. */
-export function bookSubtitle(row: BindingRow): string {
-  return [row.authors.join(", "), `${row.annotationCount} ${plural(row.annotationCount)}`]
+export function bookSubtitle(row: BindingRow, words: PanelWords = panelWords(interfaceLanguage())): string {
+  return [row.authors.join(", "), counted(words, row.annotationCount, words.binding.quotes)]
     .filter((part) => part !== "")
     .join(" · ");
 }
@@ -357,19 +362,21 @@ export function bookSubtitle(row: BindingRow): string {
  * поэтому экран говорит, что именно случилось. `undefined` — сказать нечего,
  * кандидаты на виду.
  */
-export function nothingFoundWords(row: BindingRow): string | undefined {
+export function nothingFoundWords(
+  row: BindingRow,
+  words: PanelWords = panelWords(interfaceLanguage()),
+): string | undefined {
   const { likely, weak } = groupCandidates(row.candidates);
   if (likely.length > 0) return undefined;
-  if (weak.length > 0) {
-    return "Заметки с таким названием не нашлось — есть только слабые совпадения.";
-  }
-  return "Ни одной заметки с этим названием или автором в хранилище не нашлось.";
+  return weak.length > 0 ? words.binding.onlyWeak : words.binding.nothingFound;
 }
 
 /** Подпись кнопки, за которой спрятаны слабые кандидаты. */
-export function moreCandidatesWords(weak: readonly Candidate[]): string {
-  const word = wordFor(weak.length, "заметку", "заметки", "заметок");
-  return `Показать ещё ${weak.length} ${word} со слабым совпадением`;
+export function moreCandidatesWords(
+  weak: readonly Candidate[],
+  words: PanelWords = panelWords(interfaceLanguage()),
+): string {
+  return counted(words, weak.length, words.binding.showMoreWeak);
 }
 
 /**
@@ -381,22 +388,19 @@ export function moreCandidatesWords(weak: readonly Candidate[]): string {
  * действие целиком (куда лягут выписки и что станет с его собственным
  * текстом) и назвать цену бездействия (книга без выбора не меняет ничего).
  */
-export function screenIntro(plan: BindingPlan): string[] {
-  const count = plan.awaitingUser.length;
-  const books = wordFor(count, "книга", "книги", "книг");
-  const waiting = wordFor(count, "ждёт", "ждут", "ждут");
-  return [
-    `${count} ${books} с выписками ${waiting} заметки: Beresta не знает, куда их класть, ` +
-      "и сама не решает.",
-    "Выберите заметку каждой книге — выписки лягут в неё отдельной секцией, ваш " +
-      "собственный текст останется нетронутым. Книга без выбора не изменит ничего.",
-  ];
+export function screenIntro(plan: BindingPlan, words: PanelWords = panelWords(interfaceLanguage())): string[] {
+  const say = words.binding;
+  return [counted(words, plan.awaitingUser.length, say.introBooksWaiting), say.introChoose];
 }
 
 /** Счётчик выбранного в нижней полосе. */
-export function chosenCountWords(chosen: number, total: number): string {
-  if (chosen === 0) return "Пока не выбрано ничего";
-  return `Выбрано ${chosen} ${wordFor(chosen, "книга", "книги", "книг")} из ${total}`;
+export function chosenCountWords(
+  chosen: number,
+  total: number,
+  words: PanelWords = panelWords(interfaceLanguage()),
+): string {
+  if (chosen === 0) return words.binding.nothingChosen;
+  return fill(counted(words, chosen, words.binding.chosenOf), { total });
 }
 
 /** Заметка, в которую проход записал, и сколько выписок в ней теперь. */
@@ -452,41 +456,31 @@ export interface BindingNoticeWords {
  * именно, и что теперь делать: «готово» там, где ничего не произошло, хуже
  * тишины, потому что это неправда.
  */
-export function bindingNoticeWords(after: BindingAftermath): BindingNoticeWords {
+export function bindingNoticeWords(
+  after: BindingAftermath,
+  words: PanelWords = panelWords(interfaceLanguage()),
+): BindingNoticeWords {
+  const say = words.binding;
   const quotes = after.written.reduce((sum, one) => sum + one.quotes, 0);
   const notes = after.written.map((one) => ({
     path: one.path,
-    tail: `— ${one.quotes} ${plural(one.quotes)}`,
+    tail: counted(words, one.quotes, say.noteTail),
   }));
 
   if (after.written.length === 0) {
-    return { head: `Beresta: ${nothingLanded(after)}`, notes: [], rest: [] };
+    return { head: `Beresta: ${nothingLanded(after, words)}`, notes: [], rest: [] };
   }
 
-  const head =
-    `Beresta: ${boundBooks(after.chosen)}, ${quotes} ${plural(quotes)} ` +
-    `${wordFor(quotes, "легла", "легли", "легли")} ${intoNotes(after.written.length)}:`;
-  return { head, notes, rest: leftBehind(after) };
+  const written = after.written.length;
+  const head = fill(say.noticeHead, {
+    bound: counted(words, after.chosen, say.boundBooks),
+    landed: counted(words, quotes, say.quotesLanded),
+    into: written === 1 ? say.intoOneNote : counted(words, written, say.intoNotes),
+  });
+  return { head, notes, rest: leftBehind(after, words) };
 }
 
 // MARK: - Внутреннее
-
-/** Правильная форма слова «выписка» при числе. */
-function plural(count: number): string {
-  return wordFor(count, "выписка", "выписки", "выписок");
-}
-
-/** «привязана 1 книга» / «привязано 3 книги» — начало ответа на нажатие. */
-function boundBooks(count: number): string {
-  if (count === 1) return "привязана 1 книга";
-  return `привязано ${count} ${wordFor(count, "книга", "книги", "книг")}`;
-}
-
-/** Куда легли: «в заметку» при одной, «в 3 заметки» при нескольких. */
-function intoNotes(count: number): string {
-  if (count === 1) return "в заметку";
-  return `в ${count} ${wordFor(count, "заметку", "заметки", "заметок")}`;
-}
 
 /**
  * Не легло ничего — почему.
@@ -496,51 +490,26 @@ function intoNotes(count: number): string {
  * это вслух и не сказать почему значит поменять молчание на бессмысленный
  * шум.
  */
-function nothingLanded(after: BindingAftermath): string {
+function nothingLanded(after: BindingAftermath, words: PanelWords): string {
+  const say = words.binding;
   if (after.deferred.length > 0) {
-    const open =
-      after.deferred.length === 1
-        ? "заметка открыта с несохранёнными правками"
-        : "заметки открыты с несохранёнными правками";
-    return `выписки не легли — ${open}. Сохраните и выберите заново: привязка тоже не записалась.`;
+    return after.deferred.length === 1 ? say.nothingLandedOneOpen : say.nothingLandedManyOpen;
   }
   if (after.failed.length > 0) {
-    const count = after.failed.length;
-    const word = wordFor(count, "заметки", "заметок", "заметок");
-    return `выписки не легли — проход отказался от ${count} ${word}. Причина — отдельным сообщением.`;
+    return counted(words, after.failed.length, say.nothingLandedFailed);
   }
-  return "выбор принят, но ни одна заметка не изменилась: эти выписки в них уже стоят.";
+  return say.nothingChanged;
 }
 
 /** Что осталось не записанным, когда часть заметок всё же записана. */
-function leftBehind(after: BindingAftermath): string[] {
+function leftBehind(after: BindingAftermath, words: PanelWords): string[] {
+  const say = words.binding;
   const lines: string[] = [];
   if (after.deferred.length > 0) {
-    const count = after.deferred.length;
-    const noun = wordFor(count, "заметка", "заметки", "заметок");
-    const open = count === 1 ? "открыта" : "открыты";
-    const on = count === 1 ? "ней" : "ним";
-    lines.push(
-      `Ещё ${count} ${noun} ${open} с несохранёнными правками — привязка по ${on} не ` +
-        "записана: сохраните и выберите заново.",
-    );
+    lines.push(counted(words, after.deferred.length, say.leftDeferred));
   }
-  if (after.failed.length > 0) {
-    const count = after.failed.length;
-    const noun = wordFor(count, "заметки", "заметок", "заметок");
-    lines.push(`Ещё от ${count} ${noun} проход отказался — причина отдельным сообщением.`);
-  }
+  if (after.failed.length > 0) lines.push(counted(words, after.failed.length, say.leftFailed));
   return lines;
-}
-
-/** Правильная форма слова при числе: 1 книга, 2 книги, 5 книг. */
-function wordFor(count: number, one: string, few: string, many: string): string {
-  const tail = count % 100;
-  if (tail >= 11 && tail <= 14) return many;
-  const last = count % 10;
-  if (last === 1) return one;
-  if (last >= 2 && last <= 4) return few;
-  return many;
 }
 
 /**

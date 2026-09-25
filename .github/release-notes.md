@@ -1,9 +1,10 @@
-Fixes from the community directory's automated review.
+The plugin now speaks the language of your Obsidian interface: English or Russian. Any other interface language gets English.
 
-- The manifest now declares Obsidian 1.7.2 as its minimum. The plugin calls `revealLeaf`, which the API marks as available from 1.7.2, and promising to work on older versions was a promise it could not keep.
-- Settings no longer assign styles directly: the template field is styled by a class, so your theme can still override it.
-- Smaller fixes from the same report: `createDiv` in place of `createEl("div")`, no aliasing of `this`, no unchecked value taken from a note's frontmatter, and thirty-one redundant non-null assertions removed. The thirty-second was earned, and became a real check instead.
-- `isDesktopOnly` is now stated explicitly as `false`. The plugin reads a snapshot through the vault adapter and works on phones too.
+- **Everything the plugin says follows the interface language** — the commands, the notices, the settings page, the status bar, the binding window, the conflicts panel and the backup window. One dictionary under one type, so a missing translation is a build error rather than a stray Russian string.
+- **So does the section it writes into your notes**: the heading, the *Thought.* label, the words for an ink stroke or an underline. Until now they were Russian for everyone, whatever the description said. Switching the interface language redraws the machine-written blocks once; blocks you edited stay yours, as always.
+- **New notes for books that have none go to a `Library` folder at the root of your vault** (`Библиотека` when the interface is Russian). The folder is chosen once, at first launch, and the plugin never changes it afterwards; a folder already set in the settings is kept.
+- **The last highlight's anchor no longer shows as text under the last quote.** The closing marker is now preceded by a blank line, so the `^hl-…` line stays a block anchor instead of leaking into the reading view.
+- The low-level location labels inside a "shard cannot be parsed" message stay Russian: they are diagnostics for whoever repairs a broken export file, not words meant for the reader.
 
 Install by hand: put `main.js`, `manifest.json` and `styles.css` into `<vault>/.obsidian/plugins/beresta/` and enable the plugin in settings.
 

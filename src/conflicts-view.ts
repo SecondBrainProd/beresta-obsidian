@@ -17,7 +17,9 @@
  * живёт в `src/ui/conflicts-panel.ts` и не содержит ни одного решения.
  */
 
+import { interfaceLanguage } from "./render/defaults";
 import type { SyncReport } from "./sync/pass";
+import { counted, fill, panelWords, type PanelWords } from "./ui/words";
 
 export type BoardKind =
   /** Блок правили вы: он заморожен и остаётся вашим. */
@@ -61,7 +63,11 @@ export interface BoardEntry {
 export class ConflictBoard {
   private readonly byPath = new Map<string, BoardEntry[]>();
 
+  /** Слова записей — по языку интерфейса при создании доски. */
+  constructor(private readonly words: PanelWords = panelWords(interfaceLanguage())) {}
+
   accept(report: SyncReport): void {
+    const say = this.words.conflicts;
     for (const path of report.visited) this.byPath.delete(path);
 
     for (const [path, conflicts] of Object.entries(report.conflicts)) {
@@ -80,9 +86,7 @@ export class ConflictBoard {
         path,
         anchor: undefined,
         kind: "ждёт-сохранения",
-        words:
-          "Заметка открыта, и в ней есть несохранённые правки. Выписки приедут " +
-          "следующим проходом, как только вы сохраните её.",
+        words: say.deferred,
         at: report.stamp,
       });
     }
@@ -100,10 +104,7 @@ export class ConflictBoard {
         path,
         anchor: undefined,
         kind: "заметки-нет",
-        words:
-          "Заметка привязана к книге, а файла на месте нет. Beresta не заводит его " +
-          "заново: вернуть одной секцией заметку, которую вы удалили, хуже, чем не " +
-          "вернуть. Если она нужна — привяжите книгу заново.",
+        words: say.missing,
         at: report.stamp,
       });
     }
@@ -112,10 +113,7 @@ export class ConflictBoard {
         path,
         anchor: undefined,
         kind: "книги-нет",
-        words:
-          `В выгрузке нет ${ids.length === 1 ? "книги" : "книг"} ${ids.join(", ")}. ` +
-          "Так бывает, когда книгу удалили из Beresta или выгрузка приехала с другой " +
-          "машины. Блоки этой книги в заметке не трогаются.",
+        words: fill(say.unknownBooks[this.words.form(ids.length)], { ids: ids.join(", ") }),
         at: report.stamp,
       });
     }
@@ -156,36 +154,25 @@ export class ConflictBoard {
  * Первая строка — не заголовок, а ответ на вопрос, который человек задаст,
  * увидев панель впервые: что это и надо ли что-то делать.
  */
-export function describeBoard(entries: readonly BoardEntry[]): string[] {
-  if (entries.length === 0) {
-    return [
-      "Расхождений нет.",
-      "",
-      "Здесь появятся места, где ваша правка и приложение разошлись: вы поправили " +
-        "цитату в заметке, а в Beresta её текст изменился. Такие блоки Beresta " +
-        "перестаёт перерисовывать — они остаются вашими.",
-    ];
-  }
+export function describeBoard(
+  entries: readonly BoardEntry[],
+  words: PanelWords = panelWords(interfaceLanguage()),
+): string[] {
+  const say = words.conflicts;
+  if (entries.length === 0) return [say.none, "", say.noneExplained];
 
-  const lines = [
-    "Здесь места, где ваша правка и приложение разошлись.",
-    "",
-    "Делать ничего не нужно: ваш текст остаётся вашим, эти блоки Beresta больше не " +
-      "перерисовывает. Свежую версию из приложения она кладёт свёрнутым " +
-      "предупреждением над вашим текстом.",
-    "",
-  ];
+  const lines = [say.some, "", say.someExplained, ""];
 
   const byPath = new Map<string, BoardEntry[]>();
   for (const entry of entries) {
     byPath.set(entry.path, [...(byPath.get(entry.path) ?? []), entry]);
   }
   for (const [path, list] of byPath) {
-    lines.push(`${path} — ${list.length} ${plural(list.length)}`);
+    lines.push(`${path} — ${counted(words, list.length, say.entries)}`);
     for (const entry of list) {
       const anchor = entry.anchor === undefined ? "" : ` (${entry.anchor})`;
       lines.push(`    ${entry.words}${anchor}`);
-      lines.push(`    данные на ${entry.at}`);
+      lines.push(`    ${fill(say.dataAt, { stamp: entry.at })}`);
     }
     lines.push("");
   }
@@ -216,13 +203,4 @@ function isOwnEdit(kind: BoardKind): boolean {
     kind === "ваш-заголовок" ||
     kind === "нет-в-приложении"
   );
-}
-
-function plural(count: number): string {
-  const tens = count % 100;
-  if (tens >= 11 && tens <= 14) return "записей";
-  const ones = count % 10;
-  if (ones === 1) return "запись";
-  if (ones >= 2 && ones <= 4) return "записи";
-  return "записей";
 }

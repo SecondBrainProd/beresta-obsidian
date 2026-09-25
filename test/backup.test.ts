@@ -203,19 +203,25 @@ describe("подписи про запасные копии", () => {
     return readFileSync(fileURLToPath(new URL(`../src/${file}`, import.meta.url)), "utf8");
   }
 
-  const SEEN_BY_OWNER = ["ui/settings-tab.ts", "ui/backup-modal.ts"];
+  // Слова страницы настроек с 20260925 живут в словаре панелей (`ui/words.ts`)
+  // на двух языках; сама страница слов не держит, но проверяется всё равно —
+  // чтобы обещание не вернулось туда строкой мимо словаря.
+  const SEEN_BY_OWNER = ["ui/words.ts", "ui/settings-tab.ts", "ui/backup-modal.ts"];
 
   test("ни одно окно не обещает копию «перед первой записью»", () => {
     for (const file of SEEN_BY_OWNER) {
       expect(sourceOf(file), file).not.toMatch(/перед\s+(своей\s+|первой\s+)*первой/);
+      expect(sourceOf(file), file).not.toMatch(/before\s+(its\s+|the\s+)*first\s+write/);
     }
   });
 
-  test("страница настроек называет каждую запись и круг версий", () => {
-    const page = sourceOf("ui/settings-tab.ts");
-    expect(page).toContain("перед КАЖДОЙ своей записью");
+  test("страница настроек называет каждую запись и круг версий — на обоих языках", () => {
+    const words = sourceOf("ui/words.ts");
+    expect(words).toContain("перед КАЖДОЙ своей записью");
+    expect(words).toContain("before EVERY write");
     // Настройка «сколько версий хранить» без вытеснения не значит ничего —
     // значит описание обязано сказать, что старое вытесняется.
-    expect(page).toContain("вытесняется");
+    expect(words).toContain("вытесняется");
+    expect(words).toContain("pushed out");
   });
 });

@@ -36,6 +36,9 @@
  * зоне человека.
  */
 
+import { fill, panelWords, type PassWords } from "../ui/words";
+import { interfaceLanguage } from "./defaults";
+
 /** Шаблон не разобрался или просит того, чего нет. */
 export class TemplateError extends Error {
   constructor(message: string) {
@@ -82,9 +85,13 @@ const INDENT = /^[>\t ]*/;
  * ломает сравнение «получившееся равно прежнему» в задаче 11. Строка `>` с
  * пробелом на конце и строка `>` — один и тот же коллаут и разные байты.
  */
-export function renderTemplate(template: string, scope: TemplateScope): string {
+export function renderTemplate(
+  template: string,
+  scope: TemplateScope,
+  say: PassWords = panelWords(interfaceLanguage()).pass,
+): string {
   const out: string[] = [];
-  render(parse(template), scope, out);
+  render(parse(template, say), scope, out, say);
   return out
     .join("")
     .split("\n")
@@ -94,8 +101,8 @@ export function renderTemplate(template: string, scope: TemplateScope): string {
 
 // MARK: - Разбор
 
-function parse(template: string): Node[] {
-  const tokens = standalone(tokenize(template));
+function parse(template: string, say: PassWords): Node[] {
+  const tokens = standalone(tokenize(template, say));
   const root: Node[] = [];
   const stack: { name: string; body: Node[] }[] = [];
   let current = root;
@@ -114,13 +121,12 @@ function parse(template: string): Node[] {
       const open = stack.pop();
       if (open === undefined) {
         throw new TemplateError(
-          `в шаблоне есть «{{/${token.name}}}», а открывающего «{{#${token.name}}}» нет`,
+          fill(say.templateUnopened, { closing: `{{/${token.name}}}`, opening: `{{#${token.name}}}` }),
         );
       }
       if (open.name !== token.name) {
         throw new TemplateError(
-          `в шаблоне «{{#${open.name}}}» закрыт как «{{/${token.name}}}» — ` +
-            "куски должны закрываться в том же порядке, в каком открыты",
+          fill(say.templateMisclosed, { opening: `{{#${open.name}}}`, closing: `{{/${token.name}}}` }),
         );
       }
       current = stack.length === 0 ? root : stack[stack.length - 1].body;
@@ -129,13 +135,13 @@ function parse(template: string): Node[] {
 
   if (stack.length > 0) {
     throw new TemplateError(
-      `в шаблоне не закрыт кусок «{{#${stack[stack.length - 1].name}}}»`,
+      fill(say.templateUnclosed, { opening: `{{#${stack[stack.length - 1].name}}}` }),
     );
   }
   return root;
 }
 
-function tokenize(template: string): Token[] {
+function tokenize(template: string, say: PassWords): Token[] {
   const tokens: Token[] = [];
   let at = 0;
   TAG.lastIndex = 0;
@@ -163,10 +169,7 @@ function tokenize(template: string): Token[] {
     // человеку строку «{{ comment }» прямо в заметке и ни слова о том, почему.
     const broken = value.match(/\{\{|\}\}/);
     if (broken !== null) {
-      throw new TemplateError(
-        `в шаблоне есть «${broken[0]}» без пары — метка пишется «{{имя}}», ` +
-          "«{{#имя}}» или «{{/имя}}», имя из латинских букв и цифр",
-      );
+      throw new TemplateError(fill(say.templateBrokenBraces, { broken: broken[0] }));
     }
     tokens.push({ kind: "text", value });
   }
@@ -206,46 +209,43 @@ function standalone(tokens: Token[]): Token[] {
 
 // MARK: - Подстановка
 
-function render(nodes: readonly Node[], scope: TemplateScope, out: string[]): void {
+function render(nodes: readonly Node[], scope: TemplateScope, out: string[], say: PassWords): void {
   for (const node of nodes) {
     if (node.kind === "text") {
       out.push(node.value);
       continue;
     }
     if (node.kind === "field") {
-      out.push(indented(lookupField(node.name, scope), out));
+      out.push(indented(lookupField(node.name, scope, say), out));
       continue;
     }
 
     const list = scope.lists[node.name];
     if (list !== undefined) {
-      for (const item of list) render(node.body, item, out);
+      for (const item of list) render(node.body, item, out, say);
       continue;
     }
     const value = scope.fields[node.name];
     if (value === undefined) {
-      throw new TemplateError(unknownName(node.name, scope, `{{#${node.name}}}`));
+      throw new TemplateError(unknownName(node.name, scope, `{{#${node.name}}}`, say));
     }
     // Пустое значение — кусок не рисуется целиком. Вот здесь и живёт
     // вырождение шаблона: у одной выписки из двенадцати есть своя мысль, и
     // одиннадцать заметок не должны получить ни подзаголовка, ни разделителя,
     // ни пустой строки под цитатой.
-    if (value !== "") render(node.body, scope, out);
+    if (value !== "") render(node.body, scope, out, say);
   }
 }
 
-function lookupField(name: string, scope: TemplateScope): string {
+function lookupField(name: string, scope: TemplateScope, say: PassWords): string {
   const value = scope.fields[name];
-  if (value === undefined) throw new TemplateError(unknownName(name, scope, `{{${name}}}`));
+  if (value === undefined) throw new TemplateError(unknownName(name, scope, `{{${name}}}`, say));
   return value;
 }
 
-function unknownName(name: string, scope: TemplateScope, where: string): string {
+function unknownName(name: string, scope: TemplateScope, where: string, say: PassWords): string {
   const known = [...Object.keys(scope.fields), ...Object.keys(scope.lists)].sort();
-  return (
-    `шаблон просит «${name}» (${where}), а такого значения здесь нет. ` +
-    `Доступны: ${known.join(", ")}`
-  );
+  return fill(say.templateUnknownName, { name, where, known: known.join(", ") });
 }
 
 /** Многострочное значение получает отступ той строки, куда его ставят. */

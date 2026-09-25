@@ -144,7 +144,7 @@ SELECT identifier FROM grdb_migrations ORDER BY rowid;
 `v45_collection_tree`, `v46_annotation_review`,
 `v47_session_file_and_collection_kind_name`, `v48_book_content_search`,
 `v49_zotero_sort_index`, `v50_annotation_style`, `v51_ink_stroke_colour`,
-`v52_role_of_record_shared`.
+`v52_role_of_record_shared`, `v53_own_thought`.
 Нумерация может
 содержать пропуски: имя миграции — это идентификатор, а не счётчик, и номер,
 занятый параллельной работой, второй раз не выдаётся.
@@ -185,13 +185,13 @@ SELECT identifier FROM grdb_migrations ORDER BY rowid;
 
 ```sql
 PRAGMA application_id;   -- 1112691540 → это файл Beresta
-PRAGMA user_version;     -- 1016       → версия формата 1.16
+PRAGMA user_version;     -- 1017       → версия формата 1.17
 ```
 
 - `application_id` = 1112691540 — это ASCII «BRST», отпечаток «файл Beresta».
   Другое ненулевое значение означает файл чужой программы, и совпадение имён
   таблиц в нём ничего не значит.
-- `user_version` = 1016 — версия формата числом по правилу
+- `user_version` = 1017 — версия формата числом по правилу
   `старшая × 1000 + младшая`: 1.0 → 1000, 1.1 → 1001, 2.0 → 2000.
   Младшая доля росла семь раз: `v36_article_kind` дала книге вид записи и
   адрес первоисточника, а словарю форматов — `html`; `v37_article_shelf`
@@ -449,6 +449,7 @@ PRAGMA user_version;     -- 1016       → версия формата 1.16
 | `manualFields` | TEXT | NULL | Поля, которые человек правил САМ: имена колонок этой таблицы через запятую, в байтовом порядке, без пробелов — `publishedAt,title`. Импорт такие поля не трогает: до v38 повторный импорт из Calibre перезаписывал их значениями источника, и правка человека исчезала бы молча. NULL и пустая строка значат одно — «не правил ничего». Отметку снимает тот же человек («вернуть как в источнике»). Добавлена миграцией v38. Кроме имён колонок словарь знает одно особое имя — `authors` (с 20260829): оно защищает СОСТАВ авторов книги (связки `bookAuthor`) целиком — увидев его, импорт состава не трогает. Форма не менялась: прежний читатель этого имени не знает и просто не защищает. |
 | `charCount` | INTEGER | NULL | Объём книги знаками. NULL — ещё не считан. **Ноль — считан и не найден:** у книги нет файла (у владельца таких 7), файл не читается, либо это скан без текстового слоя (среди 391 PDF владельца таких 17). Считается без движка: EPUB это архив, FB2 это XML, PDF — постранично через PDFKit (замеры 20260828: EPUB и FB2 — 92 секунды на 1552 файла, 59 мс на файл; PDF — 196 секунд на 391 файл, 502 мс на файл). У книги, где рядом с PDF лежит EPUB, число берётся у EPUB: оно точнее (в счёт PDF попадают колонтитулы каждой страницы) и в восемь раз дешевле. Добавлена миграцией v39. |
 | `wordCount` | INTEGER | NULL | Тот же объём словами. Хранятся ОБА числа: слова — то, чем человек меряет книгу, знаки — то, из чего считается время чтения по-русски (русские слова длиннее, и множитель из английских источников врал бы). Добавлена миграцией v39. |
+| `ownThought` | TEXT | NULL | **Мысль ЧЕЛОВЕКА о книге целиком** — свободный текст (v53, формат 1.17). ⚠️ Не путать с `bookDescription` выше по таблице: там чужой текст, приехавший с книгой, здесь — то, что человек думает сам. `NULL` и пустая строка значат одно: мысли нет. Входит в `searchText` (решение владельца 20260923), уезжает в заметку хранилища под заголовок секции. |
 
 Индексы: `book_on_source` — уникальный индекс по (`sourceLibraryUUID`,
 `sourceBookUUID`), но только для строк с заполненным `sourceBookUUID`
@@ -4180,7 +4181,7 @@ The schema consists of the following migrations, in the order they are applied:
 `v45_collection_tree`, `v46_annotation_review`,
 `v47_session_file_and_collection_kind_name`, `v48_book_content_search`,
 `v49_zotero_sort_index`, `v50_annotation_style`, `v51_ink_stroke_colour`,
-`v52_role_of_record_shared`.
+`v52_role_of_record_shared`, `v53_own_thought`.
 Numbering may contain
 gaps: a migration name is an identifier, not a counter, and a number claimed
 by parallel work is never handed out twice.
@@ -4222,13 +4223,13 @@ are read without touching a single table:
 
 ```sql
 PRAGMA application_id;   -- 1112691540 → this is a Beresta file
-PRAGMA user_version;     -- 1016       → format version 1.16
+PRAGMA user_version;     -- 1017       → format version 1.17
 ```
 
 - `application_id` = 1112691540 — ASCII "BRST", the "this is Beresta" mark. Any
   other non-zero value means a file belonging to another program, and matching
   table names in it mean nothing.
-- `user_version` = 1016 — the format version as an integer, by the rule
+- `user_version` = 1017 — the format version as an integer, by the rule
   `major × 1000 + minor`: 1.0 → 1000, 1.1 → 1001, 2.0 → 2000. The minor part
   grew seven times: `v36_article_kind` gave books a record kind and a source
   address, and the format dictionary gained `html`; `v37_article_shelf` added
@@ -4497,6 +4498,7 @@ reading positions all reference it by `id`.
 | `manualFields` | TEXT | NULL | The fields the human edited BY HAND: names of this table's columns, comma-separated, in byte order, without spaces — `publishedAt,title`. An import never touches such fields: before v38 a repeated Calibre import overwrote them with the source's values, and the human's edit would have vanished silently. NULL and the empty string mean the same — "edited nothing". The mark is removed by the same human ("restore from the source"). Added by migration v38. Besides column names the vocabulary knows one special name — `authors` (since 20260829): it shields the book's author LIST as a whole (the `bookAuthor` links) — seeing it, an import leaves the list alone. The shape did not change: an older reader does not know this name and simply does not shield. |
 | `charCount` | INTEGER | NULL | The book's size in characters. NULL means it has not been counted yet. **Zero means counted and none found:** the book has no file (7 of the owner's), the file is unreadable, or it is a scan with no text layer (17 of the owner's 391 PDFs). Counted without the engine: an EPUB is an archive, an FB2 is XML, a PDF is walked page by page through PDFKit (measured 2026-08-28: EPUB and FB2 — 92 seconds for 1552 files, 59 ms per file; PDF — 196 seconds for 391 files, 502 ms per file). When a PDF sits next to an EPUB, the number comes from the EPUB: it is both more accurate (a PDF count includes every page's running heads) and eight times cheaper. Added by migration v39. |
 | `wordCount` | INTEGER | NULL | The same size in words. BOTH numbers are stored: words are what a person measures a book by, characters are what reading time is computed from in Russian (Russian words are longer, and a multiplier taken from English sources would lie). Added by migration v39. |
+| `ownThought` | TEXT | NULL | **The reader's own thought about the whole book** — free text (v53, format 1.17). ⚠️ Not to be confused with `bookDescription` earlier in this table: that is someone else's text that came with the book, this is what the person thinks. `NULL` and the empty string mean the same: no thought. Included in `searchText`, exported into the vault note under the section heading. |
 
 Index: `book_on_source` — a unique index on (`sourceLibraryUUID`,
 `sourceBookUUID`), restricted to rows with a non-null `sourceBookUUID`

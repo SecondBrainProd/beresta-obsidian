@@ -24,6 +24,8 @@
  * зону человека. Отказ говорится вслух и не пишет ни байта.
  */
 
+import { interfaceLanguage } from "../render/defaults";
+import { fill, panelWords, type PassWords } from "../ui/words";
 import { SECTION_BEGIN, SECTION_END } from "../render/section";
 import { splitFrontmatter } from "./frontmatter";
 
@@ -62,7 +64,7 @@ export type FileZones =
  * устройства, а не аккуратности. Возврат каретки, если он есть, остаётся
  * внутри строки и уезжает обратно вместе с ней.
  */
-export function splitFile(text: string): FileZones {
+export function splitFile(text: string, say: PassWords = panelWords(interfaceLanguage()).pass): FileZones {
   const lines = text.split("\n");
   const { frontmatter, body } = splitFrontmatter(lines);
   const front = frontmatter ?? [];
@@ -77,23 +79,14 @@ export function splitFile(text: string): FileZones {
     return {
       kind: "broken",
       reason: "extra-pair",
-      message:
-        `В заметке ${begins.length} открывающих и ${ends.length} закрывающих маркеров ` +
-        "Beresta вместо одной пары. Где кончается наша часть заметки, отсюда не " +
-        "видно, а угадывать значит писать в ваш текст. Beresta ничего не записала: " +
-        "оставьте одну пару маркеров.",
+      message: fill(say.markersExtraPair, { begins: begins.length, ends: ends.length }),
     };
   }
   if (begins.length !== ends.length) {
     return {
       kind: "broken",
       reason: "unpaired",
-      message:
-        (begins.length === 1
-          ? "В заметке есть открывающий маркер Beresta, а закрывающего нет."
-          : "В заметке есть закрывающий маркер Beresta, а открывающего нет.") +
-        " Где кончается наша часть заметки, отсюда не видно. Beresta ничего не " +
-        "записала: верните вторую строку маркера или уберите обе.",
+      message: begins.length === 1 ? say.markersOpeningOnly : say.markersClosingOnly,
     };
   }
   const begin = begins[0];
@@ -102,9 +95,7 @@ export function splitFile(text: string): FileZones {
     return {
       kind: "broken",
       reason: "reversed",
-      message:
-        "В заметке закрывающий маркер Beresta стоит раньше открывающего. Beresta " +
-        "ничего не записала: поменяйте их местами.",
+      message: say.markersReversed,
     };
   }
 

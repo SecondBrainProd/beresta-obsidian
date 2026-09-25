@@ -62,6 +62,8 @@ async function pass(over: Partial<SyncInput> = {}): Promise<SyncReport> {
     bindings: new Map([[NOTE, [SMALL_BOOK]]]),
     notes: vault,
     backups: vault.backups(),
+    // Слова прохода проверяются русскими — их писал владелец.
+    language: "ru",
     memory: {
       get: (path) => memory.get(path),
       set: (path, known) => {

@@ -1,3 +1,4 @@
+import { panelWords } from "../src/ui/words";
 import { createHash } from "node:crypto";
 
 import { beforeEach, describe, expect, test } from "vitest";
@@ -99,6 +100,8 @@ function runner(): SyncRunner {
     },
     now: () => 1_755_300_000_000,
     announce: (line) => said.push(line),
+    // Слова уведомлений проверяются русскими — их писал владелец.
+    words: panelWords("ru"),
   };
   return new SyncRunner(ports, state);
 }

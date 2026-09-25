@@ -1,3 +1,4 @@
+import { panelWords } from "../src/ui/words";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -259,7 +260,7 @@ describe("разбор снимка на образцах Swift", () => {
 
   // Вырежьте сверку sha256 — тест обязан упасть.
   test("осколок, не сошедшийся с отпечатком, не доезжает до заметки", async () => {
-    const snapshot = present(await readSnapshot(fixtureSource("hash-mismatch")));
+    const snapshot = present(await readSnapshot(fixtureSource("hash-mismatch"), panelWords("ru").pass));
     expect(snapshot.books).toEqual([]);
     expect(snapshot.problems).toHaveLength(1);
     expect(snapshot.problems[0]!.kind).toBe("shard-checksum");

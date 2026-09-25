@@ -64,6 +64,7 @@ describe("адрес первоисточника у статьи", () => {
     title: "Что случилось с чтением",
     authors: [],
     source,
+    ownThought: undefined,
     shard: "books/064AEB6F-28F4-5208-949F-9F292581430E.jsonld",
     total: 0,
     removedTotal: 0,

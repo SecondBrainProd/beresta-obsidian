@@ -31,6 +31,13 @@ export interface ParsedShard {
    * из статьи перестаёт быть цитатой ниоткуда.
    */
   source: string | undefined;
+  /**
+   * Мысль ЧЕЛОВЕКА о книге целиком (формат базы 1.17).
+   *
+   * ⚠️ Не описание издателя — того в снимке нет вовсе: чужой текст, приехавший
+   * с книгой, в заметке человека не нужен.
+   */
+  ownThought: string | undefined;
   /** Живых выписок по самому осколку — сверяется с числом из указателя. */
   total: number | undefined;
   generated: string | undefined;
@@ -53,7 +60,17 @@ const COLLECTION_KEYS = [
   "beresta:removed",
 ];
 
-const BOOK_KEYS = ["id", "type", "label", "beresta:authors", "beresta:sourceURL"];
+// ⚠️ Ключ обязан стоять здесь, а не только в разборе: незнакомые ключи
+// плагин складывает в «незнакомое» и возит обратно как чужие. Знакомый
+// ключ, забытый в этом списке, уехал бы в заметку дважды.
+const BOOK_KEYS = [
+  "id",
+  "type",
+  "label",
+  "beresta:authors",
+  "beresta:sourceURL",
+  "beresta:ownThought",
+];
 
 const ITEM_KEYS = [
   "id",
@@ -108,6 +125,8 @@ export function parseShard(text: string, where: string): ParsedShard {
             return value === undefined ? [] : [value];
           }),
     source: bookNode === undefined ? undefined : optionalString(bookNode["beresta:sourceURL"]),
+    ownThought:
+      bookNode === undefined ? undefined : optionalString(bookNode["beresta:ownThought"]),
     total: optionalNumber(document["total"]),
     generated: optionalString(document["generated"]),
     annotations,

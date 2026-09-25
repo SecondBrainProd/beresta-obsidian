@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import { ConflictBoard, describeBoard } from "../src/conflicts-view";
+import { panelWords } from "../src/ui/words";
 import type { SyncReport } from "../src/sync/pass";
 
 /**
@@ -33,9 +34,12 @@ function report(over: Partial<SyncReport> = {}): SyncReport {
   };
 }
 
+/** Слова доски проверяются русскими — их писал владелец; английские — в `panel-language`. */
+const RU = panelWords("ru");
+
 describe("панель расхождений", () => {
   test("правка человека попадает в панель и названа его правкой", () => {
-    const board = new ConflictBoard();
+    const board = new ConflictBoard(RU);
     board.accept(
       report({
         visited: [JEDI],
@@ -57,7 +61,7 @@ describe("панель расхождений", () => {
   });
 
   test("записи заметки заменяются проходом, который её видел", () => {
-    const board = new ConflictBoard();
+    const board = new ConflictBoard(RU);
     board.accept(report({ visited: [MIND], deferred: [MIND] }));
     expect(board.count).toBe(1);
 
@@ -68,7 +72,7 @@ describe("панель расхождений", () => {
   });
 
   test("заметку, которой проход не касался, панель не забывает", () => {
-    const board = new ConflictBoard();
+    const board = new ConflictBoard(RU);
     board.accept(report({ visited: [JEDI, MIND], deferred: [JEDI] }));
     // Следующий проход сверял только одну книгу — про вторую он ничего нового
     // не узнал, и молчание о ней не значит «расхождение исчезло».
@@ -77,7 +81,7 @@ describe("панель расхождений", () => {
   });
 
   test("отложенная запись и отказ по файлу видны словами, а не кодом", () => {
-    const board = new ConflictBoard();
+    const board = new ConflictBoard(RU);
     board.accept(
       report({
         visited: [JEDI, MIND],
@@ -91,7 +95,7 @@ describe("панель расхождений", () => {
         ],
       }),
     );
-    const words = describeBoard(board.entries).join("\n");
+    const words = describeBoard(board.entries, RU).join("\n");
     expect(words).toContain("несохранённые правки");
     expect(words).toContain("нет секции Beresta");
     expect(words).toContain(MIND);
@@ -99,9 +103,9 @@ describe("панель расхождений", () => {
   });
 
   test("книга, которой нет в выгрузке, названа заметкой и книгой", () => {
-    const board = new ConflictBoard();
+    const board = new ConflictBoard(RU);
     board.accept(report({ visited: [MIND], unknownBooks: { [MIND]: ["5650781E"] } }));
-    const words = describeBoard(board.entries).join("\n");
+    const words = describeBoard(board.entries, RU).join("\n");
     expect(words).toContain("5650781E");
     expect(words).toContain("не трогаются");
     // Это не «ваша правка»: счётчик в строке состояния считает то, что человек
@@ -110,13 +114,13 @@ describe("панель расхождений", () => {
   });
 
   test("пустая панель объясняет, что здесь появится", () => {
-    const words = describeBoard([]).join("\n");
+    const words = describeBoard([], RU).join("\n");
     expect(words).toContain("Расхождений нет.");
     expect(words).toContain("остаются вашими");
   });
 
   test("панель начинается с ответа «делать ничего не нужно»", () => {
-    const board = new ConflictBoard();
+    const board = new ConflictBoard(RU);
     board.accept(
       report({
         visited: [JEDI],
@@ -125,13 +129,13 @@ describe("панель расхождений", () => {
         },
       }),
     );
-    const lines = describeBoard(board.entries);
+    const lines = describeBoard(board.entries, RU);
     expect(lines[0]).toContain("ваша правка и приложение разошлись");
     expect(lines.join("\n")).toContain("Делать ничего не нужно");
   });
 
   test("ни одного слова тревоги на всех видах записей", () => {
-    const board = new ConflictBoard();
+    const board = new ConflictBoard(RU);
     board.accept(
       report({
         visited: [JEDI, MIND],
@@ -146,7 +150,7 @@ describe("панель расхождений", () => {
         },
       }),
     );
-    const words = describeBoard(board.entries).join("\n").toLowerCase();
+    const words = describeBoard(board.entries, RU).join("\n").toLowerCase();
     for (const alarm of ["ошибк", "сбой", "авари", "внимание", "критич", "конфликт"]) {
       expect(words, `тревожное слово: ${alarm}`).not.toContain(alarm);
     }

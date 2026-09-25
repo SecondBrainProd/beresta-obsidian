@@ -51,6 +51,7 @@
  * `docs/gates.md`: зелёный прогон, в котором ничего не проверялось.
  */
 
+import { panelWords } from "../../src/ui/words";
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { createHash } from "node:crypto";
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
@@ -720,7 +721,7 @@ class Stand {
 
   /** Снимок, прочитанный НАПРЯМУЮ с диска — мимо плагина и его памяти. */
   async snapshot(): Promise<Extract<Snapshot, { kind: "present" }>> {
-    const read = await readSnapshot(fileSource(this.vault));
+    const read = await readSnapshot(fileSource(this.vault), panelWords("ru").pass);
     if (read.kind !== "present") throw new Error(`снимка нет: ${read.kind}`);
     return read;
   }
@@ -886,6 +887,8 @@ class Stand {
       // Часы стенда стоят: имя запасной копии не должно зависеть от того,
       // когда шов гоняли.
       now: () => Date.parse("2026-08-16T12:00:00Z"),
+      // Слова уведомлений и жалоб — русские: их писал владелец.
+      words: panelWords("ru"),
       announce: (line) => {
         this.said.push(line);
       },

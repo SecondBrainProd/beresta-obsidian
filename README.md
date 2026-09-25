@@ -15,7 +15,9 @@ The point is the *next to*. Your reading lives in two halves — quotes in a rea
 
 The section the plugin writes follows the language of your Obsidian interface: the heading, the *Thought.* label, the words for an ink stroke or an underline. It knows English and Russian; any other interface language gets English.
 
-**The plugin's own settings, panels and messages are in Russian for now.** It was built for a Russian-speaking reader first, and the catalogue description says the same. An English interface is being added panel by panel; this paragraph goes away when it lands.
+**So does everything the plugin says to you:** the commands, the notices, the settings page, the status bar, the binding window, the conflicts panel and the backup window. English and Russian; any other interface language gets English. The plugin was built for a Russian-speaking reader first, so the Russian wording is the original and the English follows it.
+
+Two things follow the language once, at first launch, and are then left alone. New notes for books that have none go to a `Library` folder at the root of your vault — `Библиотека` when the interface is Russian — unless you set another folder in the settings; a folder already recorded in the plugin's data never changes with the language. And the low-level location labels inside a “shard cannot be parsed” message (`book 3: file`, `expected an array`) stay Russian: they are diagnostics for whoever repairs a broken export file, not words meant for the reader.
 
 ## How it works
 
@@ -85,12 +87,12 @@ The layout is a template you can edit. It is a deliberately small language: subs
 
 | Command | What it does |
 | --- | --- |
-| Разложить выписки сейчас | Looks at the snapshot right now, ignoring what it remembers |
-| Привязать книги к заметкам | The binding window |
-| Показать расхождения | The conflicts panel, in the right sidebar |
-| Вернуть секцию Beresta в эту заметку | Re-creates a managed section you deleted |
-| Подтвердить удаление блоков в этой заметке | Releases the safety catch when a pass would remove a lot of blocks |
-| Восстановить прежнюю версию этой заметки | Rolls the note back to one of the backups taken before a write |
+| Lay out highlights now (Разложить выписки сейчас) | Looks at the snapshot right now, ignoring what it remembers |
+| Bind books to notes (Привязать книги к заметкам) | The binding window |
+| Show discrepancies (Показать расхождения) | The conflicts panel, in the right sidebar |
+| Return the Beresta section to this note (Вернуть секцию Beresta в эту заметку) | Re-creates a managed section you deleted |
+| Confirm removing blocks from this note (Подтвердить удаление блоков в этой заметке) | Releases the safety catch when a pass would remove a lot of blocks |
+| Restore an earlier version of this note (Восстановить прежнюю версию этой заметки) | Rolls the note back to one of the backups taken before a write |
 
 **The conflicts panel is not an alarm.** A conflict here means you edited a quote and the app changed the same quote — an ordinary event, not a failure. Those blocks stay yours and stop being redrawn; the app's newer version arrives as a folded callout above your text. The panel exists so you know which blocks went quiet, because otherwise you find out six months later.
 

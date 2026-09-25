@@ -43,6 +43,8 @@ import {
   type Candidate,
   type Choice,
 } from "../binding/binding-view";
+import { interfaceLanguage } from "../render/defaults";
+import { fill, panelWords, type PanelWords } from "./words";
 
 export class BindingModal extends Modal {
   private readonly choices = new Map<string, Choice>();
@@ -61,9 +63,14 @@ export class BindingModal extends Modal {
     super(app);
   }
 
+  /** Слова окна — по языку интерфейса в момент показа. */
+  private get words(): PanelWords {
+    return panelWords(interfaceLanguage());
+  }
+
   override onOpen(): void {
     const { contentEl, titleEl } = this;
-    titleEl.setText("Привязка книг к заметкам");
+    titleEl.setText(this.words.binding.windowTitle);
     contentEl.empty();
     contentEl.addClass("beresta-binding");
 
@@ -71,15 +78,15 @@ export class BindingModal extends Modal {
       contentEl.createEl("p", {
         text:
           this.plan.alreadyBound.length === 0
-            ? "В выгрузке Beresta нет книг с выписками."
-            : "Все книги выгрузки уже привязаны к заметкам.",
+            ? this.words.binding.noBooks
+            : this.words.binding.allBound,
       });
       return;
     }
 
     // Что это за экран и что будет дальше — до того, как человек начнёт жать.
     const intro = contentEl.createDiv({ cls: "beresta-binding-intro" });
-    for (const line of screenIntro(this.plan)) intro.createEl("p", { text: line });
+    for (const line of screenIntro(this.plan, this.words)) intro.createEl("p", { text: line });
 
     // Список прокручивается внутри себя: иначе нижняя полоса уезжает за край
     // окна вместе с десятью книгами, и человек её не находит.
@@ -89,11 +96,11 @@ export class BindingModal extends Modal {
     const footer = contentEl.createDiv({ cls: "beresta-binding-footer" });
     this.counter = footer.createDiv({ cls: "beresta-muted beresta-binding-counter" });
     const buttons = footer.createDiv({ cls: "beresta-binding-footer-buttons" });
-    const cancel = buttons.createEl("button", { text: "Отмена" });
+    const cancel = buttons.createEl("button", { text: this.words.binding.cancel });
     cancel.addEventListener("click", () => {
       this.close();
     });
-    this.submit = buttons.createEl("button", { text: "Привязать выбранные", cls: "mod-cta" });
+    this.submit = buttons.createEl("button", { text: this.words.binding.submit, cls: "mod-cta" });
     this.submit.addEventListener("click", () => {
       this.apply(this.choices);
       this.close();
@@ -141,9 +148,9 @@ export class BindingModal extends Modal {
     // тега в интерфейсе не остаётся) и не отдаёт вид чужому классу. Вес шрифта
     // задан в `styles.css` там же, где перенос.
     box.createDiv({ text: row.title, cls: "beresta-binding-title" });
-    box.createDiv({ text: bookSubtitle(row), cls: "beresta-muted" });
+    box.createDiv({ text: bookSubtitle(row, this.words), cls: "beresta-muted" });
 
-    const said = nothingFoundWords(row);
+    const said = nothingFoundWords(row, this.words);
     if (said !== undefined) box.createDiv({ text: said, cls: "beresta-muted" });
 
     const options = box.createDiv({ cls: "beresta-binding-options" });
@@ -159,7 +166,7 @@ export class BindingModal extends Modal {
       const rest = box.createDiv({ cls: "beresta-binding-options beresta-binding-rest" });
       rest.hide();
       const more = box.createEl("button", {
-        text: moreCandidatesWords(weak),
+        text: moreCandidatesWords(weak, this.words),
         cls: "beresta-binding-more",
       });
       more.addEventListener("click", () => {
@@ -173,7 +180,7 @@ export class BindingModal extends Modal {
 
     const action = newNoteAction(row);
     if (action.kind === "create") {
-      this.optionButton(box, row, `Создать новую заметку: ${action.path}`, [], {
+      this.optionButton(box, row, fill(this.words.binding.createNew, { path: action.path }), [], {
         kind: "create",
       });
     }
@@ -183,18 +190,18 @@ export class BindingModal extends Modal {
       this.optionButton(
         box,
         row,
-        `Дописать в существующую заметку: ${action.path}`,
-        ["заметка по этому адресу уже есть — её текст останется на месте"],
+        fill(this.words.binding.bindExisting, { path: action.path }),
+        [this.words.binding.bindExistingNote],
         { kind: "bind", path: action.path },
       );
     }
 
     const skipRow = box.createDiv({ cls: "beresta-binding-skip" });
-    this.optionButton(skipRow, row, "Пропустить эту книгу", [], { kind: "skip" });
+    this.optionButton(skipRow, row, this.words.binding.skipBook, [], { kind: "skip" });
   }
 
   private candidateButton(parent: HTMLElement, row: BindingRow, candidate: Candidate): void {
-    this.optionButton(parent, row, candidate.path, whyCandidate(candidate), {
+    this.optionButton(parent, row, candidate.path, whyCandidate(candidate, this.words), {
       kind: "bind",
       path: candidate.path,
     });
@@ -236,7 +243,7 @@ export class BindingModal extends Modal {
   /** Сколько книг выбрано — и можно ли уже нажимать. */
   private countChosen(): void {
     const chosen = [...this.choices.values()].filter((one) => one.kind !== "skip").length;
-    this.counter?.setText(chosenCountWords(chosen, this.plan.awaitingUser.length));
+    this.counter?.setText(chosenCountWords(chosen, this.plan.awaitingUser.length, this.words));
     if (this.submit !== undefined) this.submit.disabled = chosen === 0;
   }
 }

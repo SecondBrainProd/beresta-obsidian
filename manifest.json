@@ -3,7 +3,7 @@
   "name": "Beresta",
   "version": "0.1.1",
   "minAppVersion": "1.7.2",
-  "description": "Brings highlights and notes from the Beresta reader into your book notes as Markdown callouts, one managed section per book, leaving the text you wrote by hand untouched. Reads a snapshot file inside the vault and makes no network requests.",
+  "description": "Brings highlights from the Beresta reader into your book notes as Markdown callouts, one managed section per book, your own text untouched, no network. Notes follow your Obsidian language (English or Russian); settings are Russian-only for now.",
   "author": "Second Brain Production",
   "isDesktopOnly": false
 }

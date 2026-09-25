@@ -11,6 +11,12 @@ The point is the *next to*. Your reading lives in two halves — quotes in a rea
 - The **Beresta** app — for macOS, or for iPhone and iPad. The plugin reads what Beresta writes; without it there is nothing to read. On the Mac you pick the vault folder in the app; on iPhone and iPad you pick it in the Files app. Both write the same snapshot to the same hidden folder.
 - **Obsidian 1.4.0 or newer.** That is the version that introduced `vault.process`, which is how the plugin writes into a note without stepping on an editor that has the file open. Measured against Obsidian 1.13.7 on macOS; see "Not tested" below.
 
+## Language
+
+The section the plugin writes follows the language of your Obsidian interface: the heading, the *Thought.* label, the words for an ink stroke or an underline. It knows English and Russian; any other interface language gets English.
+
+**The plugin's own settings, panels and messages are in Russian for now.** It was built for a Russian-speaking reader first, and the catalogue description says the same. An English interface is being added panel by panel; this paragraph goes away when it lands.
+
 ## How it works
 
 Beresta writes a machine-readable snapshot of your highlights into one hidden folder inside your vault:
@@ -40,23 +46,27 @@ Everything the plugin writes lives between two marker lines, and nothing outside
 
 ```markdown
 %% beresta:begin %%
-## Выписки из Beresta
+## Highlights from Beresta
 
 %% beresta:hash hl-cdb6804dd44e5717983502f1e493bb6f 6b2f0a1c7d4e5f80 %%
 
-> [!quote]+ Part I → Chapter 3 → The mental Shylock
+> [!quote|beresta yellow]+ Part I → Chapter 3 → The mental Shylock
 > Attention is the only currency that buys understanding.
-> [06.08.2026 12:06](beresta://open/9504E37E-…?cfi=epubcfi%28%2F6%2F8%21%2F4%29)
+> [20260806 1206](beresta://open/9504E37E-…?cfi=epubcfi%28%2F6%2F8%21%2F4%29)
 
 ^hl-cdb6804dd44e5717983502f1e493bb6f
+
 %% beresta:end %%
 ```
+
+The heading is `## Выписки из Beresta` when your Obsidian is in Russian. The colour word after `beresta` is the highlight colour from the app; the plugin's stylesheet paints a thin spine on the left with it, and without the plugin it is just a word.
 
 Read that as four separate rules.
 
 - **Outside the markers is yours.** The plugin does not write there, and does not read there for data either. Your headings, your ratings, your links, the four years of notes above the section — bytes preserved.
 - **The block anchor addresses the callout above it.** `^hl-…` on its own line after a blank line is what makes `[[Note#^hl-…]]` resolve to the whole quote. That layout was measured on a live Obsidian against two alternatives, three ways each, with a negative control.
 - **The anchor is derived from the highlight's own id and from nothing else** — not from its position, not from its neighbours. Delete one highlight and the rest keep their anchors, so links you made to them keep working.
+- **The blank line before the closing marker is not spacing either.** A block id that shares a paragraph with the next line stops being a block id: without that blank line the last `^hl-…` in every section showed up as literal text under the last quote in reading view. Measured on a live Obsidian on 20260925, fixed the same day.
 - **The comment line above a block is how the note itself remembers that the block is the plugin's.** It holds a fingerprint of the text the plugin wrote there last. Edit the block and the fingerprints stop matching, so the block freezes and stays yours; the plugin never guesses. Obsidian hides `%% … %%` comments in reading view, and deleting one costs you nothing but a frozen block. The blank line under it is not spacing: `pandoc` refuses to start a callout right after a paragraph, and without that line the whole block collapses into one run-on paragraph for every reader that is not Obsidian. Until 20260901 that fingerprint lived only in the plugin's `data.json`, keyed by the note's *path* — so renaming the note, reinstalling the plugin, or opening the vault on a second Mac lost it, and the note stopped updating for good. Two of the three addresses already lived in the file; this is the third.
 
 The callout title is the chapter path from the book's table of contents; where there is no path it degrades to the book title, and where there is neither it degrades to a bare callout rather than to an empty heading. A highlight with no quotable text — an ink stroke on a PDF page — says so in words instead of rendering an empty quote. A highlight without your own note gets no separator, no subheading and no blank line.

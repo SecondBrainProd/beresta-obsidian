@@ -144,7 +144,7 @@ SELECT identifier FROM grdb_migrations ORDER BY rowid;
 `v45_collection_tree`, `v46_annotation_review`,
 `v47_session_file_and_collection_kind_name`, `v48_book_content_search`,
 `v49_zotero_sort_index`, `v50_annotation_style`, `v51_ink_stroke_colour`,
-`v52_role_of_record_shared`, `v53_own_thought`.
+`v52_role_of_record_shared`, `v53_own_thought`, `v54_device_fingerprint`.
 Нумерация может
 содержать пропуски: имя миграции — это идентификатор, а не счётчик, и номер,
 занятый параллельной работой, второй раз не выдаётся.
@@ -185,13 +185,13 @@ SELECT identifier FROM grdb_migrations ORDER BY rowid;
 
 ```sql
 PRAGMA application_id;   -- 1112691540 → это файл Beresta
-PRAGMA user_version;     -- 1017       → версия формата 1.17
+PRAGMA user_version;     -- 1018       → версия формата 1.18
 ```
 
 - `application_id` = 1112691540 — это ASCII «BRST», отпечаток «файл Beresta».
   Другое ненулевое значение означает файл чужой программы, и совпадение имён
   таблиц в нём ничего не значит.
-- `user_version` = 1017 — версия формата числом по правилу
+- `user_version` = 1018 — версия формата числом по правилу
   `старшая × 1000 + младшая`: 1.0 → 1000, 1.1 → 1001, 2.0 → 2000.
   Младшая доля росла семь раз: `v36_article_kind` дала книге вид записи и
   адрес первоисточника, а словарю форматов — `html`; `v37_article_shelf`
@@ -1087,6 +1087,7 @@ ORDER BY hlc`). Внешних ключей на `book`/`annotation`/… у `cha
 | `name` | TEXT | NOT NULL | Отображаемое имя устройства. |
 | `platform` | TEXT | NOT NULL | Платформа (например, `"macOS"`). |
 | `lastSeenAt` | TEXT | NOT NULL | Дата последней активности устройства, ISO 8601. |
+| `hardwareFingerprint` | TEXT | NULL | **Хеш отпечатка железа** (v54, формат 1.18) — сверка личности с машиной при открытии хранилища. Наружу не уезжает и машину не называет: это хеш, а не идентификатор. `NULL` у баз до 1.18 и на платформах без отпечатка — дописывается при первом открытии без смены личности. Не совпал — хранилище родом с другой машины, и приложение заводит новую личность (решение D-BRS-014): новая строка `device`, невывезенные строки `changeLog` перештамповываются новым хвостом, сегменты прежней личности в хранилище не трогаются. |
 
 **Идентификатор случайный, а не системный.** `deviceId` — обычный `UUID`,
 выданный при первом открытии этого хранилища, а не серийный номер машины и
@@ -4181,7 +4182,7 @@ The schema consists of the following migrations, in the order they are applied:
 `v45_collection_tree`, `v46_annotation_review`,
 `v47_session_file_and_collection_kind_name`, `v48_book_content_search`,
 `v49_zotero_sort_index`, `v50_annotation_style`, `v51_ink_stroke_colour`,
-`v52_role_of_record_shared`, `v53_own_thought`.
+`v52_role_of_record_shared`, `v53_own_thought`, `v54_device_fingerprint`.
 Numbering may contain
 gaps: a migration name is an identifier, not a counter, and a number claimed
 by parallel work is never handed out twice.
@@ -4223,13 +4224,13 @@ are read without touching a single table:
 
 ```sql
 PRAGMA application_id;   -- 1112691540 → this is a Beresta file
-PRAGMA user_version;     -- 1017       → format version 1.17
+PRAGMA user_version;     -- 1018       → format version 1.18
 ```
 
 - `application_id` = 1112691540 — ASCII "BRST", the "this is Beresta" mark. Any
   other non-zero value means a file belonging to another program, and matching
   table names in it mean nothing.
-- `user_version` = 1017 — the format version as an integer, by the rule
+- `user_version` = 1018 — the format version as an integer, by the rule
   `major × 1000 + minor`: 1.0 → 1000, 1.1 → 1001, 2.0 → 2000. The minor part
   grew seven times: `v36_article_kind` gave books a record kind and a source
   address, and the format dictionary gained `html`; `v37_article_shelf` added
@@ -5101,6 +5102,7 @@ other devices will appear only together with synchronization.
 | `name` | TEXT | NOT NULL | Display name of the device. |
 | `platform` | TEXT | NOT NULL | Platform (e.g. `"macOS"`). |
 | `lastSeenAt` | TEXT | NOT NULL | Date the device was last active, ISO 8601. |
+| `hardwareFingerprint` | TEXT | NULL | **Hash of a hardware fingerprint** (v54, format 1.18) — used to check the identity against the machine when the storage is opened. It never leaves the device and does not name the machine: a hash, not an identifier. `NULL` in databases before 1.18 and on platforms without a fingerprint — filled in on the first open without changing the identity. A mismatch means the storage came from another machine, and the app creates a new identity (decision D-BRS-014): a new `device` row, not-yet-exported `changeLog` rows get the new tail, the previous identity's sync segments are left untouched. |
 
 **The identifier is random, not system-derived.** `deviceId` is an ordinary
 `UUID` minted the first time this storage is opened — not the machine serial

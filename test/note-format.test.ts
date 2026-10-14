@@ -67,7 +67,7 @@ describe("шаблон заметки и формат", () => {
     const text = renderNote(ready.text, book(), ready.name, RU.pass);
     expect(text.startsWith("---\n")).toBe(true);
     expect(text).toContain('Название: "Гибкое сознание: новый взгляд"');
-    expect(text).toContain('Автор: "[[Кэрол Дуэк]]"');
+    expect(text).toContain('Автор:\n  - "[[Кэрол Дуэк]]"\n');
     expect(text).toContain("Год издания: 2013");
     expect(text).toContain('  - "личная_эффективность"');
     expect(text).toContain('Полки: "Ремесло, Фокус"');
@@ -86,8 +86,63 @@ describe("шаблон заметки и формат", () => {
       RU.pass,
     );
     expect(text).toContain('URL: "https://example.org/a"');
-    expect(text).toContain("> [Гибкое сознание: новый взгляд](https://example.org/a)");
+    expect(text).toContain("> [Гибкое сознание\\: новый взгляд](https://example.org/a)");
     expect(text).toContain(EMPTY_SECTION);
+  });
+
+  // Проверка безопасности 0.3.0 (20261014): чужое имя автора с кавычкой,
+  // обратной косой и переводом строки ломало шапку; у книги с соавторами
+  // строка `"[[А]]", "[[Б]]"` не была законным YAML вовсе.
+  // Рез: верните автора строкой с `replace('"', '')` — краснеет.
+  test("авторы в шапке «Книги» — список законных строк, чужие символы не ломают её", () => {
+    const ready = defaultFormats("ru")[0];
+    const text = renderNote(
+      ready.text,
+      book({ authors: ['Иван "Тёмный"\\', "Мария]]|#Б\nберesta-book-id: подмена"] }),
+      ready.name,
+      RU.pass,
+    );
+    const head = text.split("\n---\n")[0].split("\n");
+    const start = head.indexOf("Автор:");
+    expect(start, text).toBeGreaterThan(0);
+    const items = head.slice(start + 1, start + 3);
+    for (const item of items) {
+      expect(item, item).toMatch(/^  - "/);
+      const value = JSON.parse(item.slice(4)) as string;
+      expect(value.startsWith("[[") && value.endsWith("]]"), value).toBe(true);
+      expect(value.slice(2, -2), value).not.toMatch(/[[\]|#^\\\n]/);
+    }
+    expect(head.some((line) => line.startsWith("берesta-book-id") || line.startsWith("beresta-book-id")), text).toBe(false);
+  });
+
+  // Проверка безопасности 0.3.0: название статьи с чужого сайта закрывало
+  // ссылку на источник и дописывало Markdown; адрес не той схемы попадал в ссылку.
+  // Рез: верните `[{{ title }}]({{ url }})` — краснеет.
+  test("ссылка на источник у «Статьи»: чужое название и адрес не выходят из неё", () => {
+    const ready = defaultFormats("ru")[1];
+    const article = (title: string, source: string) =>
+      renderNote(
+        ready.text,
+        book({ title, authors: [], source, details: { ...book().details!, kind: "article", tags: [] } }),
+        ready.name,
+        RU.pass,
+      );
+    const hostile = article("Взлом](javascript:alert(1))\n# Подмена", "https://example.org/a (b)");
+    const linkLine = (note: string) =>
+      note.split("\n").find((line) => line.startsWith("> [") && !line.startsWith("> [!"));
+    const link = linkLine(hostile);
+    expect(link, hostile).toBe(
+      "> [Взлом\\]\\(javascript\\:alert\\(1\\)\\) \\# Подмена](https://example.org/a%20%28b%29)",
+    );
+    expect(hostile).not.toMatch(/^# Подмена/m);
+
+    const script = article("Статья", "javascript:alert(1)");
+    expect(linkLine(script), script).toBe("> [Статья]()");
+
+    // HTML в названии не открывает тега: `<` экранирован.
+    const html = article('<img src=x onerror="alert(1)"> и <iframe src="https://evil">', "https://example.org/a");
+    const htmlLink = linkLine(html) ?? "";
+    expect(htmlLink, html).not.toMatch(/(^|[^\\])</);
   });
 
   // Приёмка вслепую 20261012, Н1: `Серия: "…" (12)` — текст после закрывающей

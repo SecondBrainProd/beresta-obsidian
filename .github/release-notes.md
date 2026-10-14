@@ -1,11 +1,9 @@
-Note formats — templates in the spirit of Zotero Integration.
+Security fixes for the ready-made "Book" and "Article" formats introduced in 0.3.0.
 
-- **Note formats.** Define formats in the settings: a name, a note template, a highlights-block template and a path pattern. Every format gets its own command; a book picker creates the note in the right place, with the `beresta-format` property. Two ready formats, "Book" and "Article", are one button away.
-- **Templates, second version.** Paths, filters, `if/elif/else`, `for` with `loop`, whitespace trimming the way Nunjucks does it; the old syntax keeps working. A broken template is reported with its line number.
-- **More about each book in the snapshot.** Kind, subtitle, publisher, publication date, language, series, tags and shelves, reading status, rating — all available to templates.
-- **Fixes.** A backslash in a book title no longer breaks the shard file name; a failed repeated merge is reported instead of passing silently; a damaged backup index is set aside and named; frontmatter values go through a YAML filter, so an article title cannot add properties, and a path pattern cannot leave the folder.
-- The interface language now comes from Obsidian's own `getLanguage()`.
+- **Authors are now a YAML list** in the "Book" front matter. An author name with a quote or a backslash could break the whole front matter, and a book with several authors produced a line that was not valid YAML.
+- **The source link of "Article" is escaped.** A page title from a web site could close the link and add its own Markdown or HTML to your note; an address with another scheme than http(s) or mailto is no longer linked.
+- New template filters for your own formats: `wikilink`, `mdtext` and `mdurl`. Use them for anything that came from a web page.
+
+If you already pressed "Add ready formats" in 0.3.0, delete `Templates/Beresta Book.md` and `Templates/Beresta Article.md` (or the Russian ones) and press the button again — existing files are never overwritten.
 
 Install by hand: put `main.js`, `manifest.json` and `styles.css` into `<vault>/.obsidian/plugins/beresta/` and enable the plugin in settings.
-
-Without the Beresta app there is nothing to show: the snapshot it reads is written by the app into your vault.

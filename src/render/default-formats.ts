@@ -11,7 +11,12 @@
  *
  * ⚠️ Значения в шапке — ТОЛЬКО через фильтр `yaml` (проверка безопасности
  * 20261008): название статьи приходит с чужого сайта и без кавычек могло бы
- * дописать в свойства заметки свои ключи.
+ * дописать в свойства заметки свои ключи. Автор — СПИСКОМ, каждый через
+ * `wikilink | yaml`; ссылка на источник в теле — `mdtext` и `mdurl` (проверка
+ * безопасности 0.3.0, 20261014: обратная косая в имени автора ломала шапку,
+ * название со скобками дописывало Markdown в заметку; прежняя строка
+ * `"[[А]]", "[[Б]]"` у книги с соавторами законным YAML не была вовсе). Номер
+ * серии — число по разбору снимка (`optionalNumber`), фильтр ему не нужен.
  *
  * Кнопка в настройках кладёт эти тексты файлами в `Templates/` хранилища и
  * заводит два формата. Существующий файл не перезаписывается никогда.
@@ -39,7 +44,10 @@ export interface DefaultFormat {
 
 const BOOK_RU = `---
 Название: {{ title | yaml }}
-Автор: {% for a in authors %}"[[{{ a | replace('"', '') | replace("\\n", " ") }}]]"{% if not loop.last %}, {% endif %}{% endfor %}
+Автор:
+{%- for a in authors %}
+  - {{ a | wikilink | yaml }}
+{%- endfor %}
 Год издания: {{ date | format("YYYY") }}
 Издательство: {{ publisher | yaml }}
 {% if series %}Серия: {{ series | yaml }}
@@ -53,7 +61,7 @@ const BOOK_RU = `---
 ---
 {% if ownThought %}
 > [!abstract]+ Мысль о книге
-> {{ ownThought }}
+> {{ ownThought | replace("\\n", "\\n> ") }}
 {% endif %}
 ### Книга в трёх предложениях
 
@@ -89,7 +97,7 @@ tags:
 ---
 
 {% if url %}> [!link] Источник
-> [{{ title }}]({{ url }})
+> [{{ title | mdtext }}]({{ url | mdurl }})
 
 {% endif %}### О чём статья
 
@@ -102,7 +110,10 @@ tags:
 
 const BOOK_EN = `---
 Title: {{ title | yaml }}
-Author: {% for a in authors %}"[[{{ a | replace('"', '') | replace("\\n", " ") }}]]"{% if not loop.last %}, {% endif %}{% endfor %}
+Author:
+{%- for a in authors %}
+  - {{ a | wikilink | yaml }}
+{%- endfor %}
 Year: {{ date | format("YYYY") }}
 Publisher: {{ publisher | yaml }}
 {% if series %}Series: {{ series | yaml }}
@@ -116,7 +127,7 @@ Shelves: {{ collections | join(", ") | yaml }}
 ---
 {% if ownThought %}
 > [!abstract]+ My thought on the book
-> {{ ownThought }}
+> {{ ownThought | replace("\\n", "\\n> ") }}
 {% endif %}
 ### The book in three sentences
 
@@ -152,7 +163,7 @@ tags:
 ---
 
 {% if url %}> [!link] Source
-> [{{ title }}]({{ url }})
+> [{{ title | mdtext }}]({{ url | mdurl }})
 
 {% endif %}### What it is about
 

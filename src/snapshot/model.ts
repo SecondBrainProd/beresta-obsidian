@@ -124,6 +124,31 @@ export interface SnapshotTombstone {
 }
 
 /** Книга снимка: запись указателя вместе с разобранным осколком. */
+/**
+ * Сведения записи — для шаблона заметки (план `20261008-шаблоны-плагина-план.md`,
+ * задача 1; слово владельца «Всё, кроме обложки»).
+ *
+ * Каждое поле может отсутствовать: старый снимок их не несёт вовсе, и шаблон
+ * получит пустоту, а не ошибку.
+ */
+export interface SnapshotRecordDetails {
+  kind: string | undefined;
+  subtitle: string | undefined;
+  publisher: string | undefined;
+  /** День издания, `ГГГГ-ММ-ДД`. */
+  published: string | undefined;
+  language: string | undefined;
+  series: string | undefined;
+  seriesIndex: number | undefined;
+  /** Метки САМОЙ книги. */
+  tags: string[];
+  collections: string[];
+  readStatus: string | undefined;
+  rating: number | undefined;
+  addedAt: string | undefined;
+  finishedAt: string | undefined;
+}
+
 export interface SnapshotBook {
   /** `uuid` книги. Пусто — осколок выписок, у которых книги нет вовсе. */
   uuid: string;
@@ -140,6 +165,11 @@ export interface SnapshotBook {
    * Пусто — поля в осколке нет вовсе, и здесь `undefined`.
    */
   ownThought: string | undefined;
+  /**
+   * Сведения записи. Необязательно: книгу снимка собирают и проверки, и у
+   * старого снимка их нет — шаблон тогда получит пустоту, а не ошибку.
+   */
+  details?: SnapshotRecordDetails;
   /** Имя осколка внутри `books/`. */
   shard: string;
   /** Живых выписок по указателю. Сверяется с разобранным осколком. */

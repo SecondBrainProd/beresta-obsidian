@@ -57,6 +57,11 @@ export interface RunnerPorts {
   announce(line: string): void;
   /** Слова уведомлений; не названы — по языку интерфейса. */
   readonly words?: PanelWords;
+  /**
+   * Шаблон блока заметки по её формату (план шаблонов, задача 5). Порт, а не
+   * опция захода: формат действует в КАЖДОМ проходе, и плановом тоже.
+   */
+  templateFor?(path: string): string | undefined;
 }
 
 export interface TickOptions {
@@ -77,6 +82,8 @@ export interface TickOptions {
   readonly mayCreateSection?: ReadonlySet<string>;
   /** Снять предохранитель по этим заметкам. */
   readonly allowRemovals?: ReadonlySet<string>;
+  /** Первый текст заводимых заметок — шаблон заметки формата (задача 4). */
+  readonly initialText?: (path: string) => string | undefined;
 }
 
 export interface RunOutcome {
@@ -281,6 +288,8 @@ export class SyncRunner {
       mayCreateSection: fresh,
       allowRemovals: options.allowRemovals,
       only: options.only,
+      templateFor: this.ports.templateFor === undefined ? undefined : (path) => this.ports.templateFor?.(path),
+      initialText: options.initialText,
     });
 
     this.lastReport = report;

@@ -635,8 +635,8 @@ describe("границы управляемой секции", () => {
 describe("шаблон человека ошибается словами", () => {
   const scope = { fields: { comment: "" }, lists: {} };
 
-  // Вырежьте бросок в `lookupField` (верните пустую строку) — тест обязан
-  // упасть: опечатка в шаблоне тихо выест кусок заметки.
+  // Вырежьте бросок незнакомого имени в `evaluate` (ветка `path`, верните
+  // `undefined`) — тест обязан упасть: опечатка в шаблоне тихо выест кусок заметки.
   test("незнакомое имя — ошибка, а не пустое место", () => {
     expect(() => renderTemplate("{{коммент}}", scope, RU_PASS)).toThrow(TemplateError);
     expect(() => renderTemplate("{{cmment}}", scope, RU_PASS)).toThrow(/comment/);

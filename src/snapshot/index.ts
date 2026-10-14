@@ -203,6 +203,7 @@ export async function readSnapshot(
       authors: parsed.authors,
       source: parsed.source,
       ownThought: parsed.ownThought,
+      details: parsed.details,
       shard: name,
       total: optionalNumber(entry["total"]) ?? parsed.annotations.length,
       removedTotal: optionalNumber(entry["removedTotal"]) ?? parsed.tombstones.length,

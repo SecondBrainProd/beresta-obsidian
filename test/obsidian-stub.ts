@@ -30,6 +30,15 @@ export class Modal {
   close(): void {}
 }
 
+export class SuggestModal<T> extends Modal {
+  setPlaceholder(_text: string): void {}
+  getSuggestions(_query: string): T[] {
+    return [];
+  }
+}
+
+export class FuzzySuggestModal<T> extends SuggestModal<T> {}
+
 export class ItemView {
   constructor(_leaf?: unknown) {}
 }
@@ -51,6 +60,16 @@ export class MarkdownView {}
 export class TFile {}
 
 export class TFolder {}
+
+/// Язык интерфейса — как у настоящего Obsidian 1.8+: проверки задают его тем же
+/// ключом `language` в `localStorage`, что и раньше, и ответ обязан совпадать.
+export function getLanguage(): string {
+  try {
+    return globalThis.localStorage?.getItem("language") || "en";
+  } catch {
+    return "en";
+  }
+}
 
 export function normalizePath(path: string): string {
   return path;

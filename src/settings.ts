@@ -70,6 +70,30 @@ export interface BerestaSettings {
    * настраивал.
    */
   readonly template?: string;
+  /**
+   * Форматы заметок — как «форматы ввоза» у Zotero Integration (план
+   * `20261008-шаблоны-плагина-план.md`, задача 3; слова владельца R01, R04).
+   *
+   * Пусто — форматов нет, плагин работает как прежде: одна папка, стандартный
+   * (или свой из `template`) шаблон блока. Имена уникальны; порядок — порядок
+   * команд в палитре и списка при «создать новую заметку».
+   */
+  readonly formats: readonly NoteFormat[];
+}
+
+/** Формат заметки: имя и пути к файлам шаблонов в хранилище. */
+export interface NoteFormat {
+  /** Имя формата — им же подписана команда палитры. */
+  readonly name: string;
+  /** Файл шаблона ВСЕЙ заметки; пусто — заметка без шаблона, как прежде. */
+  readonly noteTemplate?: string;
+  /** Файл шаблона блока выписки; пусто — стандартный (или `template`). */
+  readonly blockTemplate?: string;
+  /**
+   * Образец пути новой заметки, `Библиотека/Статьи/{{title}}.md`; пусто —
+   * папка из `libraryFolder` и название, как прежде.
+   */
+  readonly pathPattern?: string;
 }
 
 /** Состояние плагина целиком: настройки плюс память. */
@@ -135,6 +159,7 @@ export const DEFAULT_SETTINGS: Omit<BerestaSettings, "timeZoneOffsetMinutes"> = 
   keepBackups: 5,
   removalShare: 0.2,
   removalCount: 20,
+  formats: [],
 };
 
 /**
@@ -196,6 +221,7 @@ export function readState(
     // в которой пропали все якоря», — и слияние прочтёт это как «человек убрал
     // все блоки».
     template: acceptableTemplate(string(stored["template"])),
+    formats: readFormats(stored["formats"]),
   };
 
   const watchRaw = asObject(document["watch"]);
@@ -250,7 +276,7 @@ export function stateToJSON(state: PluginState): Record<string, unknown> {
   return {
     ...state.unknown,
     version: 1,
-    settings: { ...state.settings },
+    settings: { ...state.settings, formats: state.settings.formats.map((format) => ({ ...format })) },
     watch: {
       hash: state.watch.hash,
       hint: state.watch.hint === undefined ? undefined : { ...state.watch.hint },
@@ -282,8 +308,54 @@ export function stateToJSON(state: PluginState): Record<string, unknown> {
 export function acceptableTemplate(raw: string | undefined): string | undefined {
   if (raw === undefined) return undefined;
   if (raw.trim() === "") return undefined;
-  if (!raw.includes("{{anchor}}")) return undefined;
+  if (!hasAnchor(raw)) return undefined;
   return raw;
+}
+
+/**
+ * Есть ли в шаблоне блока якорь — `{{anchor}}` в любом написании второй
+ * версии: `{{ anchor }}`, `{{- anchor -}}`. Прежняя проверка искала строку
+ * буквально и молча отбрасывала бы шаблон, написанный с пробелами.
+ */
+export function hasAnchor(template: string): boolean {
+  // Якорь бывает и путём внутри цикла второй версии — `{{ a.anchor }}` в
+  // `{% for a in annotations %}`: приёмка вслепую 20261012 (Н2) написала файл
+  // секции ровно так, и сторож отверг его как «без якоря».
+  return /\{\{-?\s*(?:[A-Za-z_][A-Za-z0-9_]*\s*\.\s*)?anchor\s*-?\}\}/.test(template);
+}
+
+/**
+ * Форматы из `data.json`. Битая запись (без имени, не объект) пропускается,
+ * повтор имени — тоже: побеждает первый. Пути — строки как есть; есть ли файл,
+ * узнаётся при чтении шаблона, и отказ там — словами с путём (Р4).
+ */
+export function readFormats(raw: unknown): NoteFormat[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const formats: NoteFormat[] = [];
+  for (const entry of raw) {
+    const object = asObject(entry);
+    const name = string(object?.["name"])?.trim();
+    if (object === undefined || name === undefined || name === "" || seen.has(name)) continue;
+    seen.add(name);
+    const path = (key: string): string | undefined => {
+      const value = string(object[key])?.trim();
+      return value === undefined || value === "" ? undefined : value;
+    };
+    formats.push({
+      name,
+      noteTemplate: path("noteTemplate"),
+      blockTemplate: path("blockTemplate"),
+      pathPattern: path("pathPattern"),
+    });
+  }
+  return formats;
+}
+
+/** Формат по имени — так его ищет заметка по своему свойству `beresta-format`. */
+export function formatNamed(settings: BerestaSettings, name: string | undefined): NoteFormat | undefined {
+  if (name === undefined) return undefined;
+  return settings.formats.find((format) => format.name === name.trim());
 }
 
 // MARK: - Внутреннее
@@ -458,7 +530,7 @@ export function readTemplateField(
   if (typed.trim() === "") {
     return { kind: "ok", value: undefined, said: words.templateEmpty };
   }
-  if (!typed.includes("{{anchor}}")) {
+  if (!hasAnchor(typed)) {
     return { kind: "refused", said: words.templateNoAnchor };
   }
   return { kind: "ok", value: typed };

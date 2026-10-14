@@ -104,6 +104,17 @@ export interface SyncInput {
   readonly language?: string;
   /** Сверить только эти заметки. Пусто — все привязанные. */
   readonly only?: ReadonlySet<string>;
+  /**
+   * Шаблон блока для этой заметки — по её формату (план шаблонов, задача 5).
+   * `undefined` — шаблон из настроек (или стандартный). Файлы читает тот, кто
+   * зовёт проход: сам проход остаётся чистой функцией от входа.
+   */
+  readonly templateFor?: (path: string) => string | undefined;
+  /**
+   * Первый текст заметки, которой ещё нет, — отрисованный шаблон заметки её
+   * формата (задача 4). `undefined` — пустой файл, как прежде.
+   */
+  readonly initialText?: (path: string) => string | undefined;
 }
 
 export interface SyncReport {
@@ -220,7 +231,7 @@ export async function runSync(input: SyncInput): Promise<SyncReport> {
       report.missing.push(path);
       continue;
     }
-    const onDisk = exists ? await input.notes.read(path) : "";
+    const onDisk = exists ? await input.notes.read(path) : (input.initialText?.(path) ?? "");
     // Сколько выписок в заметке ДО прохода. Дальше это число уточнит запись,
     // а если записи не будет — оно и есть правда об этой заметке.
     report.quotes[path] = quotesInSection(onDisk);
@@ -229,7 +240,7 @@ export async function runSync(input: SyncInput): Promise<SyncReport> {
     try {
       rendered = wrapSection(
         books.map((book) =>
-          renderBookBody(book, book.annotations, template, {
+          renderBookBody(book, book.annotations, input.templateFor?.(path) ?? template, {
             timeZoneOffsetMinutes: input.settings.timeZoneOffsetMinutes,
             language,
           }),
@@ -294,6 +305,7 @@ export async function runSync(input: SyncInput): Promise<SyncReport> {
 
     let wrote: KnownSection | undefined;
     let deferredInside = false;
+    let refusedInside: { refused: MergeRefusal; message: string } | undefined;
     await input.notes.process(path, (current) => {
       // Второй раз — здесь. Обработчик синхронный, JS однопоточен, и в этот
       // промежуток человек напечатать ничего не успевает: значит вопрос «нет
@@ -313,11 +325,27 @@ export async function runSync(input: SyncInput): Promise<SyncReport> {
       }
       // Файл изменился между чтением и записью — сливаем заново, уже с ним.
       const again = merge(current, rendered, known, options);
-      if (again.refused !== undefined || !again.changed) return current;
+      // Отказ повторного слияния — такой же отказ, как первого, и молчать о
+      // нём нельзя: файл остаётся прежним, а человек иначе считал бы, что
+      // выписки доехали (находка разбора ультраревью 20260906).
+      if (again.refused !== undefined) {
+        refusedInside = { refused: again.refused, message: again.message ?? "" };
+        return current;
+      }
+      if (!again.changed) return current;
+      // В файл ложится текст второго слияния — и в отчёт идут его конфликты
+      // и удаления, а не первого, чей текст отброшен.
+      setOrDrop(report.conflicts, path, again.conflicts);
+      setOrDrop(report.removed, path, again.removed);
+      setOrDrop(report.deleted, path, again.deleted);
       wrote = again.known;
       return again.text;
     });
 
+    if (refusedInside !== undefined) {
+      report.refusals.push({ path, ...refusedInside });
+      continue;
+    }
     if (deferredInside) {
       report.deferred.push(path);
       continue;
@@ -348,4 +376,10 @@ export function conflictCount(report: SyncReport): number {
 function quotesInSection(text: string): number {
   const zones = splitFile(text);
   return zones.kind === "section" ? anchorsIn(zones.innerLines).size : 0;
+}
+
+/** Кладёт непустой список под путь заметки, пустой — убирает. */
+function setOrDrop<T>(into: Record<string, readonly T[]>, path: string, items: readonly T[]): void {
+  if (items.length > 0) into[path] = [...items];
+  else delete into[path];
 }

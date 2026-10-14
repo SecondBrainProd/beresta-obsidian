@@ -2,6 +2,7 @@ import {
   SnapshotUnreadable,
   type JsonValue,
   type SnapshotAnnotation,
+  type SnapshotRecordDetails,
   type SnapshotSelector,
   type SnapshotTombstone,
   type UnknownKeys,
@@ -38,6 +39,8 @@ export interface ParsedShard {
    * с книгой, в заметке человека не нужен.
    */
   ownThought: string | undefined;
+  /** Сведения записи для шаблона заметки. */
+  details: SnapshotRecordDetails;
   /** Живых выписок по самому осколку — сверяется с числом из указателя. */
   total: number | undefined;
   generated: string | undefined;
@@ -70,7 +73,48 @@ const BOOK_KEYS = [
   "beresta:authors",
   "beresta:sourceURL",
   "beresta:ownThought",
+  "beresta:kind",
+  "beresta:subtitle",
+  "beresta:publisher",
+  "beresta:published",
+  "beresta:language",
+  "beresta:series",
+  "beresta:seriesIndex",
+  "beresta:bookTags",
+  "beresta:collections",
+  "beresta:readStatus",
+  "beresta:rating",
+  "beresta:addedAt",
+  "beresta:finishedAt",
 ];
+
+/** Сведения записи из узла книги; нет узла или поля — пусто. */
+function parseDetails(book: Record<string, JsonValue> | undefined, where: string): SnapshotRecordDetails {
+  const names = (key: string): string[] =>
+    book === undefined
+      ? []
+      : asArray(book[key] ?? [], `${where}: ${key}`).flatMap((name) => {
+          const value = optionalString(name);
+          return value === undefined ? [] : [value];
+        });
+  const text = (key: string): string | undefined => (book === undefined ? undefined : optionalString(book[key]));
+  const number = (key: string): number | undefined => (book === undefined ? undefined : optionalNumber(book[key]));
+  return {
+    kind: text("beresta:kind"),
+    subtitle: text("beresta:subtitle"),
+    publisher: text("beresta:publisher"),
+    published: text("beresta:published"),
+    language: text("beresta:language"),
+    series: text("beresta:series"),
+    seriesIndex: number("beresta:seriesIndex"),
+    tags: names("beresta:bookTags"),
+    collections: names("beresta:collections"),
+    readStatus: text("beresta:readStatus"),
+    rating: number("beresta:rating"),
+    addedAt: text("beresta:addedAt"),
+    finishedAt: text("beresta:finishedAt"),
+  };
+}
 
 const ITEM_KEYS = [
   "id",
@@ -127,6 +171,7 @@ export function parseShard(text: string, where: string): ParsedShard {
     source: bookNode === undefined ? undefined : optionalString(bookNode["beresta:sourceURL"]),
     ownThought:
       bookNode === undefined ? undefined : optionalString(bookNode["beresta:ownThought"]),
+    details: parseDetails(bookNode, where),
     total: optionalNumber(document["total"]),
     generated: optionalString(document["generated"]),
     annotations,

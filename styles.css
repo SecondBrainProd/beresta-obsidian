@@ -282,5 +282,31 @@ input.beresta-setting-invalid {
    (правило каталога `obsidianmd/no-static-styles-assignment`). */
 .beresta-template-area {
     width: 100%;
+    min-height: 14em;
     font-family: var(--font-monospace);
+}
+
+/* Строка шаблона — столбиком (кадр владельца 20261007): в обычной строке
+   настроек колонка управления сжимается под длинное описание, и поле шириной
+   «100 %» от неё вырождалось в узкую полоску. Описание и поле — каждое на всю
+   ширину, кнопка сброса — рядом с полем. */
+.beresta-setting-stacked {
+    flex-wrap: wrap;
+    align-items: flex-start;
+}
+
+.beresta-setting-stacked > .setting-item-info {
+    flex: 1 1 100%;
+    margin-inline-end: 0;
+}
+
+.beresta-setting-stacked > .setting-item-control {
+    flex: 1 1 100%;
+    justify-content: flex-start;
+    align-items: flex-start;
+    margin-top: var(--size-4-2);
+}
+
+.beresta-setting-stacked > .setting-item-control > .beresta-template-area {
+    flex: 1 1 auto;
 }

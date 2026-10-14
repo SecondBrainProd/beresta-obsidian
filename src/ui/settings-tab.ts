@@ -41,7 +41,7 @@
  * Obsidian.
  */
 
-import { PluginSettingTab, Setting, TFolder, type App } from "obsidian";
+import { Notice, PluginSettingTab, Setting, TFolder, type App } from "obsidian";
 
 import {
   INTERVAL_FIELD,
@@ -54,8 +54,10 @@ import {
   type BerestaSettings,
   type NumberField,
 } from "../settings";
+import type { NoteFormat } from "../settings";
+import { defaultFormats, defaultSectionFile } from "../render/default-formats";
 import { interfaceLanguage } from "../render/defaults";
-import { panelWords, type SettingsWords } from "./words";
+import { fill, panelWords, type SettingsWords } from "./words";
 
 /** Что странице нужно от плагина — и ничего больше. */
 export interface SettingsHost {
@@ -70,6 +72,11 @@ export interface SettingsHost {
    */
   settingsNow(): BerestaSettings;
   save(next: BerestaSettings): Promise<void>;
+  /**
+   * Завести файл хранилища, если его нет. `false` — файл уже был и НЕ тронут:
+   * кнопка готовых форматов не перезаписывает ничего (план шаблонов, задача 6).
+   */
+  createFile?(path: string, text: string): Promise<boolean>;
 }
 
 export class BerestaSettingTab extends PluginSettingTab {
@@ -131,6 +138,130 @@ export class BerestaSettingTab extends PluginSettingTab {
     );
 
     this.templateField();
+    this.formatsSection();
+  }
+
+  /**
+   * Форматы заметок — как «форматы ввоза» у Zotero Integration (план
+   * `20261008-шаблоны-плагина-план.md`, задачи 3 и 6).
+   */
+  private formatsSection(): void {
+    const words = this.words.formats;
+    new Setting(this.containerEl).setName(words.heading).setDesc(words.description).setHeading();
+
+    this.host.settingsNow().formats.forEach((_, index) => {
+      new Setting(this.containerEl)
+        .setName(fill(words.formatHeading, { index: String(index + 1) }))
+        .addExtraButton((button) => {
+          button
+            .setIcon("trash")
+            .setTooltip(words.remove)
+            .onClick(() => {
+              void this.saveFormats(this.host.settingsNow().formats.filter((_, at) => at !== index));
+            });
+        });
+      this.formatText(index, "name", words.name);
+      this.formatText(index, "noteTemplate", words.noteTemplate);
+      this.formatText(index, "blockTemplate", words.blockTemplate, words.blockTemplateDescription);
+      this.formatText(index, "pathPattern", words.pathPattern);
+    });
+
+    new Setting(this.containerEl).addButton((button) => {
+      button.setButtonText(words.add).onClick(() => {
+        const formats = this.host.settingsNow().formats;
+        const named = (number: number): string => fill(words.formatHeading, { index: String(number) });
+        let number = formats.length + 1;
+        while (formats.some((one) => one.name === named(number))) number += 1;
+        void this.saveFormats([...formats, { name: named(number) }]);
+      });
+    });
+
+    if (this.host.createFile !== undefined) {
+      const setting = new Setting(this.containerEl)
+        .setName(words.addDefaults)
+        .setDesc(words.addDefaultsDescription);
+      const say = this.sayLine(setting);
+      setting.addButton((button) => {
+        button.setButtonText(words.addDefaults).onClick(() => {
+          void (async () => {
+            const created: string[] = [];
+            const kept: string[] = [];
+            let formats = [...this.host.settingsNow().formats];
+            // Секция — тем же файлом и тем же правилом: есть — не трогаем. Оба
+            // готовых формата получают её шаблоном секции, если своего нет: так
+            // у человека живой образец цикла с {{anchor}} вместо подсказки (Н2).
+            const section = defaultSectionFile(interfaceLanguage());
+            const sectionMade = await this.host.createFile!(section.file, section.text);
+            (sectionMade ? created : kept).push(section.file);
+            for (const ready of defaultFormats(interfaceLanguage())) {
+              const made = await this.host.createFile!(ready.file, ready.text);
+              (made ? created : kept).push(ready.file);
+              if (!formats.some((one) => one.name === ready.name)) {
+                formats.push({
+                  name: ready.name,
+                  noteTemplate: ready.file,
+                  blockTemplate: section.file,
+                  pathPattern: `${ready.folder}/{{title}}.md`,
+                });
+              } else {
+                formats = formats.map((one) =>
+                  one.name === ready.name && one.blockTemplate === undefined
+                    ? { ...one, blockTemplate: section.file }
+                    : one,
+                );
+              }
+            }
+            await this.host.save({ ...this.host.settingsNow(), formats });
+            this.display();
+            const lines = [
+              created.length > 0 ? fill(words.defaultsCreated, { files: created.join(", ") }) : "",
+              kept.length > 0 ? fill(words.defaultsKept, { files: kept.join(", ") }) : "",
+            ].filter((line) => line !== "");
+            new Notice(`Beresta: ${lines.join(" ")}`, 10_000);
+            say(lines.join(" "), false);
+          })();
+        });
+      });
+    }
+  }
+
+  /** Одно поле формата; применяется уходом фокуса, как прочие поля страницы. */
+  private formatText(
+    index: number,
+    key: "name" | "noteTemplate" | "blockTemplate" | "pathPattern",
+    label: string,
+    description?: string,
+  ): void {
+    const setting = new Setting(this.containerEl).setName(label);
+    if (description !== undefined) setting.setDesc(description);
+    const say = this.sayLine(setting);
+    setting.addText((text) => {
+      text.setValue(this.host.settingsNow().formats[index]?.[key] ?? "");
+      const commit = async (): Promise<void> => {
+        const formats = this.host.settingsNow().formats;
+        const current = formats[index];
+        if (current === undefined) return;
+        const value = text.getValue().trim();
+        if (key === "name") {
+          if (value === "" || formats.some((one, at) => at !== index && one.name === value)) {
+            say(this.words.formats.nameTaken, true);
+            text.setValue(current.name);
+            return;
+          }
+          say(undefined, false);
+        }
+        const next = { ...current, [key]: value === "" && key !== "name" ? undefined : value };
+        if (next[key] === current[key]) return;
+        await this.saveFormats(formats.map((one, at) => (at === index ? next : one)));
+      };
+      this.pending.push(commit);
+      text.inputEl.addEventListener("blur", () => void commit());
+    });
+  }
+
+  private async saveFormats(formats: readonly NoteFormat[]): Promise<void> {
+    await this.host.save({ ...this.host.settingsNow(), formats });
+    this.display();
   }
 
   /**
@@ -150,6 +281,11 @@ export class BerestaSettingTab extends PluginSettingTab {
     const setting = new Setting(this.containerEl)
       .setName(this.words.templateName)
       .setDesc(this.words.templateDescription);
+    // Строка — столбиком: описание сверху во всю ширину, поле под ним тоже во
+    // всю. В обычной строке колонка управления сжимается под длинное описание,
+    // и поле шириной «100 %» от неё вырождалось в узкую полоску (кадр владельца
+    // 20261007, Obsidian 1.14).
+    setting.settingEl.addClass("beresta-setting-stacked");
     const say = this.sayLine(setting);
 
     setting.addTextArea((area) => {

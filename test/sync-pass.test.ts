@@ -290,6 +290,32 @@ describe("проход синка", () => {
     expect(vault.peek(NOTE)).not.toBe(settled);
   });
 
+  // Находка разбора ультраревью 20260906: файл изменился между чтением и
+  // записью, повторное слияние отказало — и проход молча вернул прежний
+  // текст, не сказав ни в отказах, ни в отложенных. Человек думал, что
+  // выписки доехали. Верните `return current` без записи отказа — тест
+  // обязан упасть.
+  test("отказ повторного слияния под замком доходит до отчёта", async () => {
+    await pass();
+    vault.forget();
+    vault.beforeProcess = (path) => {
+      // Человек стёр секцию ровно в щели между чтением и записью.
+      const text = vault.peek(path)!;
+      vault.put(path, text.split("%% beresta:begin %%")[0]!.trimEnd());
+    };
+
+    const report = await pass({
+      snapshot: await withoutOne(),
+      allowRemovals: new Set([NOTE]),
+      mayCreateSection: new Set(),
+    });
+
+    expect(report.written).toEqual([]);
+    expect(report.refusals.map((one) => one.refused)).toEqual(["section-missing"]);
+    expect(report.refusals[0]!.path).toBe(NOTE);
+    expect(report.refusals[0]!.message).not.toBe("");
+  });
+
   test("секция стёрта человеком — уведомление, а не новая секция в конце", async () => {
     await pass();
     const cleaned = vault

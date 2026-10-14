@@ -86,12 +86,23 @@ export async function rememberBefore(
   store: BackupStore,
   request: BackupRequest,
 ): Promise<BackupRecord | undefined> {
-  const all = await listBackups(store);
+  const index = await readBackupIndex(store);
+  const all = index.records;
   const mine = all.filter((item) => item.path === request.path);
   const newest = mine[mine.length - 1];
   if (newest !== undefined && newest.length === request.text.length) {
     const previous = await store.read(`${BACKUP_FOLDER}/${newest.id}`);
     if (previous === request.text) return undefined;
+  }
+
+  // Указатель, который не разобрался целиком, перед перезаписью откладывается
+  // рядом как есть: в нём могут быть строки прежних копий, которых мы не
+  // поняли, и затереть их значило бы потерять копии из виду навсегда.
+  const setAside = [...index.setAside];
+  if (index.kind === "broken") {
+    const name = asideName(request.stamp, setAside);
+    await store.write(`${BACKUP_FOLDER}/${name}`, index.raw);
+    setAside.push(name);
   }
 
   const id = uniqueId(request, all);
@@ -110,31 +121,66 @@ export async function rememberBefore(
 
   const dropped = new Set(extra.map((item) => item.id));
   const next = [...all.filter((item) => !dropped.has(item.id)), record];
-  await store.write(BACKUP_INDEX, JSON.stringify({ version: 1, backups: next }, null, 1));
+  const body = setAside.length > 0 ? { version: 1, backups: next, setAside } : { version: 1, backups: next };
+  await store.write(BACKUP_INDEX, JSON.stringify(body, null, 1));
   return record;
+}
+
+/**
+ * Указатель копий — тремя ответами, а не двумя.
+ *
+ * «Нет файла» и «файл есть, но не разобрался» — разные ответы, и смешивать их
+ * нельзя: разбор 20260906 нашёл, что испорченный указатель читался как «копий
+ * нет», а следующая запись переписывала его одной строкой — прежние копии
+ * пропадали из окна версий и из круга уборки навсегда. `broken` несёт и то,
+ * что удалось понять (годные строки), и сырой текст — его откладывает
+ * `rememberBefore`. `setAside` — имена отложенных прежде указателей: о них
+ * окно версий говорит человеку словами.
+ */
+export type BackupIndexState =
+  | { readonly kind: "absent"; readonly records: BackupRecord[]; readonly setAside: string[] }
+  | { readonly kind: "ok"; readonly records: BackupRecord[]; readonly setAside: string[] }
+  | {
+      readonly kind: "broken";
+      readonly records: BackupRecord[];
+      readonly setAside: string[];
+      readonly raw: string;
+    };
+
+export async function readBackupIndex(store: BackupStore): Promise<BackupIndexState> {
+  const raw = await store.read(BACKUP_INDEX);
+  if (raw === undefined) return { kind: "absent", records: [], setAside: [] };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { kind: "broken", records: [], setAside: [], raw };
+  }
+  if (typeof parsed !== "object" || parsed === null) {
+    return { kind: "broken", records: [], setAside: [], raw };
+  }
+  const document = parsed as { backups?: unknown; setAside?: unknown };
+  const setAside = Array.isArray(document.setAside)
+    ? document.setAside.filter((item): item is string => typeof item === "string")
+    : [];
+  if (!Array.isArray(document.backups)) return { kind: "broken", records: [], setAside, raw };
+  const records = document.backups.filter(isRecord);
+  if (records.length !== document.backups.length) {
+    return { kind: "broken", records, setAside, raw };
+  }
+  return { kind: "ok", records, setAside };
 }
 
 /**
  * Что лежит в копиях, от старых к новым.
  *
  * Указатель, который не читается или называет себя чужим форматом, — это
- * «копий не видно», а не падение: запись заметки не имеет права сорваться
- * из-за испорченного вспомогательного файла. Файлы копий при этом не трогаются:
- * человек найдёт их в папке плагина глазами.
+ * «видно то, что разобралось», а не падение: запись заметки не имеет права
+ * сорваться из-за испорченного вспомогательного файла. Файлы копий при этом
+ * не трогаются, а сам указатель `rememberBefore` откладывает рядом.
  */
 export async function listBackups(store: BackupStore, path?: string): Promise<BackupRecord[]> {
-  const raw = await store.read(BACKUP_INDEX);
-  if (raw === undefined) return [];
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return [];
-  }
-  if (typeof parsed !== "object" || parsed === null) return [];
-  const backups = (parsed as { backups?: unknown }).backups;
-  if (!Array.isArray(backups)) return [];
-  const records = backups.filter(isRecord);
+  const { records } = await readBackupIndex(store);
   return path === undefined ? records : records.filter((item) => item.path === path);
 }
 
@@ -172,6 +218,17 @@ function uniqueId(request: BackupRequest, all: readonly BackupRecord[]): string 
     counter += 1;
   }
   return id;
+}
+
+/** Имя для отложенного испорченного указателя — неповторимое. */
+function asideName(stamp: string, taken: readonly string[]): string {
+  let name = `index-broken-${stamp}.json`;
+  let counter = 2;
+  while (taken.includes(name)) {
+    name = `index-broken-${stamp}-${counter}.json`;
+    counter += 1;
+  }
+  return name;
 }
 
 /** Короткий отпечаток пути — только чтобы имена не совпадали. */

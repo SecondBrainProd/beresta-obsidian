@@ -144,7 +144,8 @@ SELECT identifier FROM grdb_migrations ORDER BY rowid;
 `v45_collection_tree`, `v46_annotation_review`,
 `v47_session_file_and_collection_kind_name`, `v48_book_content_search`,
 `v49_zotero_sort_index`, `v50_annotation_style`, `v51_ink_stroke_colour`,
-`v52_role_of_record_shared`, `v53_own_thought`, `v54_device_fingerprint`.
+`v52_role_of_record_shared`, `v53_own_thought`, `v54_device_fingerprint`,
+`v55_opds_catalog`, `v56_user_dictionary`.
 Нумерация может
 содержать пропуски: имя миграции — это идентификатор, а не счётчик, и номер,
 занятый параллельной работой, второй раз не выдаётся.
@@ -185,13 +186,13 @@ SELECT identifier FROM grdb_migrations ORDER BY rowid;
 
 ```sql
 PRAGMA application_id;   -- 1112691540 → это файл Beresta
-PRAGMA user_version;     -- 1018       → версия формата 1.18
+PRAGMA user_version;     -- 1020       → версия формата 1.20
 ```
 
 - `application_id` = 1112691540 — это ASCII «BRST», отпечаток «файл Beresta».
   Другое ненулевое значение означает файл чужой программы, и совпадение имён
   таблиц в нём ничего не значит.
-- `user_version` = 1018 — версия формата числом по правилу
+- `user_version` = 1020 — версия формата числом по правилу
   `старшая × 1000 + младшая`: 1.0 → 1000, 1.1 → 1001, 2.0 → 2000.
   Младшая доля росла семь раз: `v36_article_kind` дала книге вид записи и
   адрес первоисточника, а словарю форматов — `html`; `v37_article_shelf`
@@ -651,6 +652,66 @@ Beresta не умеет и не будет.
 | `id` | INTEGER | PK, автоинкремент | Идентификатор. |
 | `name` | TEXT | NOT NULL, UNIQUE | Название тега. |
 | `uuid` | TEXT | NOT NULL, UNIQUE | Стабильный внешний идентификатор тега, используется синком. Добавлена миграцией v6 пересборкой таблицы — та же причина, что у `author.uuid` выше. У новой строки — детерминированный (не случайный) с миграции v8, см. «`book.uuid` и `annotation.uuid` для импортированных записей». |
+
+#### `opdsCatalog`
+
+Подключённый чужой каталог OPDS (миграция **v55**, формат 1.19): домашний
+Calibre, Calibre-Web, Komga, Kavita. Постановка —
+`docs/plans/20260929-opds-клиент-постановка.md`.
+
+⚠️ **Пароля в таблице нет и не будет.** Он живёт в защищённой кладовой
+устройства (связка ключей у Apple, Credential Manager на Windows) под учётом
+`opds.catalog.<uuid>`. База уезжает обменом и ложится в резервные копии —
+пароль от чужого сервера не нужен ни там, ни там. Имя входа хранится, чтобы
+человек видел, под кем подключён.
+
+⚠️ **Строка едет между устройствами** (`SyncedDatasets`: `synced`) — слово
+владельца 20260929: «Подключенные каталоги - да, ездят». Едут имя, адрес и имя
+входа; пароль не едет никогда — на втором устройстве каталог приезжает и
+просит войти, а учёт в кладовой тот же (`opds.catalog.<uuid>`). До 20260929
+набор был `localOnly` как отложенное решение.
+
+⚠️ **Книги каталога здесь не хранятся вовсе.** По решению **D-BRS-025**
+просмотр каталога не заводит в библиотеке ничего, а скачанная книга ложится
+обычной книгой — в `book` и `bookFile`, как перетащенная в окно.
+
+| Колонка | Тип | Обязательность | Смысл |
+|---|---|---|---|
+| `id` | INTEGER | PK, автоинкремент | Идентификатор. |
+| `uuid` | TEXT | NOT NULL, UNIQUE | Стабильный внешний идентификатор. По нему же строится учёт пароля в кладовой устройства — адрес человек вправе поправить, не заводя каталог заново. |
+| `name` | TEXT | NOT NULL | Как человек назвал каталог: «Дома на Synology» понятнее адреса. |
+| `url` | TEXT | NOT NULL | Адрес каталога, как его дал человек. |
+| `username` | TEXT | NULL | Имя входа, если сервер его требует; `NULL` — каталог открытый. |
+| `createdAt` | TEXT | NOT NULL, default `''` | Когда каталог подключён, ISO 8601. |
+| `modifiedAt` | TEXT | NOT NULL, default `''` | Последняя правка строки, ISO 8601. |
+| `deletedAt` | TEXT | NULL | Тумбстоун мягкого удаления; `NULL` — подключение в силе. ⚠️ Пароль из кладовой убирает зовущий: ядро до неё не дотягивается. |
+| `lastOpenedAt` | TEXT | NULL | Когда каталог последний раз открывали НА ЭТОМ устройстве — по нему список показывается в порядке живости, а не заведения. ⚠️ Местная отметка: в журнал обмена не едет (`SyncedDatasets.derivedColumns`, порода `book.charCount`). |
+
+#### `userDictionary`
+
+Свой словарь человека — StarDict или DSL (миграция **v56**, формат 1.20).
+Постановка — `docs/plans/20261001-словари-постановка.md`.
+
+⚠️ **Едут список и порядок, файлы — нет** (`SyncedDatasets`: `synced`; слово
+владельца 20261004 по В2: «А, только список и порядок»). Толковый словарь —
+сотни мегабайт; каждое устройство держит свою копию в своём хранилище и
+узнаёт «тот же словарь» по `fingerprint`. Нет файла с таким отпечатком —
+словарь «добавлен на другом устройстве».
+
+⚠️ **Пути к файлу в таблице нет нарочно**: путь одного устройства на другом
+ничего не значит, а уехал бы обменом.
+
+| Колонка | Тип | Обязательность | Смысл |
+|---|---|---|---|
+| `id` | INTEGER | PK, автоинкремент | Идентификатор. |
+| `uuid` | TEXT | NOT NULL, UNIQUE | Стабильный внешний идентификатор. |
+| `name` | TEXT | NOT NULL | Имя словаря — из `.ifo` StarDict или шапки DSL. |
+| `kind` | TEXT | NOT NULL | Вид: `stardict` или `dsl` — какой читатель его открывает. |
+| `fingerprint` | TEXT | NOT NULL | SHA-256 главного файла (`.ifo` или `.dsl`/`.dsl.dz`); по нему устройство находит свою копию, а добавление того же файла не заводит вторую строку. |
+| `sortKey` | TEXT | NOT NULL | Место в списке — дробный ключ, как у полок. Словари спрашиваются в этом порядке (слово владельца по В3: «А, свои первыми»), системный — за ними. Совпавшие после обмена ключи разводятся по `uuid`. |
+| `createdAt` | TEXT | NOT NULL, default `''` | Когда добавлен, ISO 8601. |
+| `modifiedAt` | TEXT | NOT NULL, default `''` | Последняя правка строки, ISO 8601. |
+| `deletedAt` | TEXT | NULL | Тумбстоун мягкого удаления; `NULL` — словарь в списке. Файл своей копии убирает зовущий. |
 
 #### `feed`
 
@@ -4182,7 +4243,8 @@ The schema consists of the following migrations, in the order they are applied:
 `v45_collection_tree`, `v46_annotation_review`,
 `v47_session_file_and_collection_kind_name`, `v48_book_content_search`,
 `v49_zotero_sort_index`, `v50_annotation_style`, `v51_ink_stroke_colour`,
-`v52_role_of_record_shared`, `v53_own_thought`, `v54_device_fingerprint`.
+`v52_role_of_record_shared`, `v53_own_thought`, `v54_device_fingerprint`,
+`v55_opds_catalog`, `v56_user_dictionary`.
 Numbering may contain
 gaps: a migration name is an identifier, not a counter, and a number claimed
 by parallel work is never handed out twice.
@@ -4224,13 +4286,13 @@ are read without touching a single table:
 
 ```sql
 PRAGMA application_id;   -- 1112691540 → this is a Beresta file
-PRAGMA user_version;     -- 1018       → format version 1.18
+PRAGMA user_version;     -- 1020       → format version 1.20
 ```
 
 - `application_id` = 1112691540 — ASCII "BRST", the "this is Beresta" mark. Any
   other non-zero value means a file belonging to another program, and matching
   table names in it mean nothing.
-- `user_version` = 1018 — the format version as an integer, by the rule
+- `user_version` = 1020 — the format version as an integer, by the rule
   `major × 1000 + minor`: 1.0 → 1000, 1.1 → 1001, 2.0 → 2000. The minor part
   grew seven times: `v36_article_kind` gave books a record kind and a source
   address, and the format dictionary gained `html`; `v37_article_shelf` added
@@ -4700,6 +4762,66 @@ A free-form tag, applicable both to books (`bookTag`) and to annotations
 | `id` | INTEGER | PK, autoincrement | Identifier. |
 | `name` | TEXT | NOT NULL, UNIQUE | Tag name. |
 | `uuid` | TEXT | NOT NULL, UNIQUE | Stable external identifier of the tag, used by sync. Added by migration v6 by rebuilding the table — same reason as `author.uuid` above. New rows get a deterministic (not random) one as of migration v8 — see "`book.uuid` and `annotation.uuid` for imported records". |
+
+#### `opdsCatalog`
+
+A connected third-party OPDS catalogue (migration **v55**, format 1.19): a home
+Calibre, Calibre-Web, Komga or Kavita.
+
+⚠️ **The password is not stored here and never will be.** It lives in the
+device's secure store (Keychain on Apple, Credential Manager on Windows) under
+the account `opds.catalog.<uuid>`. The database travels through sync and ends up
+in backups — a third-party server's password belongs in neither. The login name
+is stored so the user can see who they are connected as.
+
+⚠️ **The row travels between devices** (`SyncedDatasets`: `synced`) — the
+owner's decision of 20260929. Name, address and login name travel; the password
+never does — on another device the catalogue arrives and asks to sign in, under
+the same store account (`opds.catalog.<uuid>`). Until 20260929 the dataset was
+`localOnly` as a deferred decision.
+
+⚠️ **Catalogue books are not stored here at all.** By decision **D-BRS-025**
+browsing a catalogue creates nothing in the library, and a downloaded book lands
+as an ordinary book — in `book` and `bookFile`, just like one dragged into the
+window.
+
+| Column | Type | Constraints | Meaning |
+|---|---|---|---|
+| `id` | INTEGER | PK, autoincrement | Identifier. |
+| `uuid` | TEXT | NOT NULL, UNIQUE | Stable external identifier; also the key of the password's account in the device store, so the address can be edited without reconnecting. |
+| `name` | TEXT | NOT NULL | What the user called the catalogue. |
+| `url` | TEXT | NOT NULL | The catalogue address as the user provided it. |
+| `username` | TEXT | NULL | Login name if the server requires one; `NULL` — an open catalogue. |
+| `createdAt` | TEXT | NOT NULL, default `''` | When the catalogue was connected, ISO 8601. |
+| `modifiedAt` | TEXT | NOT NULL, default `''` | Last row change, ISO 8601. |
+| `deletedAt` | TEXT | NULL | Soft-deletion tombstone; `NULL` — the connection stands. ⚠️ The caller removes the password from the device store: the core cannot reach it. |
+| `lastOpenedAt` | TEXT | NULL | When the catalogue was last opened ON THIS DEVICE — the list is ordered by this, not by creation. ⚠️ Device-local: not journalled for sync (`SyncedDatasets.derivedColumns`, same kind as `book.charCount`). |
+
+#### `userDictionary`
+
+The user's own dictionary — StarDict or DSL (migration **v56**, format 1.20).
+Statement — `docs/plans/20261001-словари-постановка.md`.
+
+⚠️ **The list and its order travel; the files do not** (`SyncedDatasets`:
+`synced`; the owner's decision of 20261004). A monolingual dictionary is
+hundreds of megabytes; each device keeps its own copy in its own storage and
+recognises "the same dictionary" by `fingerprint`. No file with that
+fingerprint — the dictionary "was added on another device".
+
+⚠️ **There is deliberately no file path column**: one device's path means
+nothing on another, yet it would travel through sync.
+
+| Column | Type | Constraints | Meaning |
+|---|---|---|---|
+| `id` | INTEGER | PK, autoincrement | Identifier. |
+| `uuid` | TEXT | NOT NULL, UNIQUE | Stable external identifier. |
+| `name` | TEXT | NOT NULL | Dictionary name — from the StarDict `.ifo` or the DSL header. |
+| `kind` | TEXT | NOT NULL | `stardict` or `dsl` — which reader opens it. |
+| `fingerprint` | TEXT | NOT NULL | SHA-256 of the main file (`.ifo` or `.dsl`/`.dsl.dz`); a device finds its copy by it, and adding the same file again does not create a second row. |
+| `sortKey` | TEXT | NOT NULL | Position in the list — a fractional key, as for shelves. Dictionaries are consulted in this order, the system one after them. Keys tied after sync are broken by `uuid`. |
+| `createdAt` | TEXT | NOT NULL, default `''` | When added, ISO 8601. |
+| `modifiedAt` | TEXT | NOT NULL, default `''` | Last row change, ISO 8601. |
+| `deletedAt` | TEXT | NULL | Soft-deletion tombstone; `NULL` — in the list. The caller removes its own file copy. |
 
 #### `feed`
 

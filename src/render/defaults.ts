@@ -1,3 +1,5 @@
+import { getLanguage } from "obsidian";
+
 import { noteWords } from "./words";
 
 /**
@@ -82,7 +84,11 @@ import { noteWords } from "./words";
  * своей — иначе при пустой мысли внутри коллаута осталась бы пустая строка, а
  * пустая строка коллаут закрывает.
  */
-/// Язык интерфейса Obsidian — тем же способом, каким его узнают другие плагины.
+/// Язык интерфейса Obsidian — через его собственный `getLanguage()` (ревью
+/// каталога 20260927: «Use Obsidian's getLanguage() instead of
+/// localStorage.getItem("language")»), а где его ещё нет (Obsidian до 1.8,
+/// `minAppVersion` у нас 1.7.2) — тем же способом, каким язык узнают другие
+/// плагины, из настроек.
 ///
 /// ⚠️ **Хранилище настроек бывает недоступно** (проверки в узле, приватное окно),
 /// и тогда `localStorage` бросает или отвечает пустотой. Неизвестный язык — это
@@ -90,6 +96,14 @@ import { noteWords } from "./words";
 /// показывать русскую строку тому, о ком мы ничего не знаем, — та самая беда,
 /// от которой заход и затевался.
 export function interfaceLanguage(): string {
+  try {
+    // В сборке под старый Obsidian привязка `getLanguage` — `undefined`, а не
+    // функция: модуль `obsidian` даёт приложение, и старое отдаёт меньше.
+    const fromObsidian = typeof getLanguage === "function" ? getLanguage() : "";
+    if (typeof fromObsidian === "string" && fromObsidian.length > 0) return fromObsidian;
+  } catch {
+    // Приложение не ответило — ниже настройки.
+  }
   try {
     const stored = globalThis.localStorage?.getItem("language");
     if (typeof stored === "string" && stored.length > 0) return stored;

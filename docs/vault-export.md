@@ -218,10 +218,23 @@ jq 'keys, (.books[0] | keys), (.books | length), ([.books[].total] | add)' \
 
 | Поле | Где стоит | Что означает |
 |---|---|---|
-| `beresta:book` | собрание | Книга собрания: `id`, `type`, `label`, `beresta:authors`, `beresta:sourceURL`, `beresta:ownThought` |
+| `beresta:book` | собрание | Книга собрания: `id`, `type`, `label`, `beresta:authors`, `beresta:sourceURL`, `beresta:ownThought` и сведения записи (`beresta:kind` и ниже) |
 | `beresta:authors` | внутри `beresta:book` | Авторы по порядку. Порядок значащий — отсюда `@list` в словаре |
 | `beresta:sourceURL` | внутри `beresta:book` | Адрес первоисточника — у статей. У книги поля нет вовсе: пустая строка означала бы «адрес есть, но пуст». Года издания у статьи нет, а часть их без автора, и адрес — единственное, чем цитата из статьи перестаёт быть цитатой ниоткуда |
 | `beresta:ownThought` | внутри `beresta:book` | **Мысль ЧЕЛОВЕКА о книге целиком** (формат базы 1.17). ⚠️ Не описание издателя: того в снимке нет вовсе — чужой текст, приехавший с книгой, в заметке человека не нужен. Пусто — поля нет вовсе, по тому же правилу, что у адреса выше. Плагин рисует её под заголовком секции, ДО цитат: мысль о книге про книгу целиком, а цитаты про места в ней |
+| `beresta:kind` | внутри `beresta:book` | Вид записи: `book`, `article`, `attachment`. Есть всегда |
+| `beresta:subtitle` | внутри `beresta:book` | Подзаголовок, строкой. Пусто — поля нет |
+| `beresta:publisher` | внутри `beresta:book` | Издательство, строкой. Пусто — поля нет |
+| `beresta:language` | внутри `beresta:book` | Язык так, как записан в карточке. Пусто — поля нет |
+| `beresta:series` | внутри `beresta:book` | Название серии. Пусто — поля нет |
+| `beresta:published` | внутри `beresta:book` | День издания, `ГГГГ-ММ-ДД` по UTC: день, а не момент |
+| `beresta:seriesIndex` | внутри `beresta:book` | Номер в серии, число. Без серии поля нет |
+| `beresta:bookTags` | внутри `beresta:book` | Метки САМОЙ книги по имени. Метки выписок живут у выписок (`TextualBody` с `purpose: tagging`) |
+| `beresta:collections` | внутри `beresta:book` | Имена живых коллекций, где стоит книга |
+| `beresta:readStatus` | внутри `beresta:book` | Статус чтения: `unread`, `inbox`, `reading`, `paused`, `stopped`, `read`. Есть всегда |
+| `beresta:rating` | внутри `beresta:book` | Оценка человека, целое |
+| `beresta:addedAt` | внутри `beresta:book` | Момент добавления в библиотеку, ISO 8601 в UTC. Есть всегда |
+| `beresta:finishedAt` | внутри `beresta:book` | Момент, когда книгу дочитали, ISO 8601 в UTC |
 | `beresta:removed` | собрание | Надгробия мягко удалённых выписок |
 | `beresta:deletedAt` | внутри `beresta:removed` | Момент мягкого удаления, ISO 8601 |
 | `beresta:type` | выписка | Вид пометки: `highlight`, `underline`, `note`, `text`, `area`, `ink`. В модели W3C ему места нет: `motivation` отвечает на другой вопрос, и `highlight` с `underline` схлопнулись бы в один `highlighting` |
@@ -601,10 +614,23 @@ Fifteen names, and that is the whole list. The `beresta:` prefix expands to
 
 | Field | Where | Meaning |
 |---|---|---|
-| `beresta:book` | collection | The collection's book: `id`, `type`, `label`, `beresta:authors`, `beresta:sourceURL` |
+| `beresta:book` | collection | The collection's book: `id`, `type`, `label`, `beresta:authors`, `beresta:sourceURL`, `beresta:ownThought` and the record's details (`beresta:kind` and below) |
 | `beresta:authors` | inside `beresta:book` | Authors in order. The order matters — hence `@list` in the vocabulary |
 | `beresta:sourceURL` | inside `beresta:book` | The address of the original — present for articles. A book has no such field at all: an empty string would mean "there is an address, and it is empty". An article has no publication year and some have no author, so the address is the only thing that keeps a quote from an article from being a quote out of nowhere |
 | `beresta:ownThought` | inside `beresta:book` | **The reader's own thought about the whole book** (database format 1.17). ⚠️ Not the publisher's blurb: that is absent from the snapshot entirely — someone else's text that came with the book has no place in a person's note. Empty means the field is absent, by the same rule as the address above. The plugin renders it under the section heading, BEFORE the quotes: a thought about the book is about the whole book, quotes are about places in it |
+| `beresta:kind` | inside `beresta:book` | The record's kind: `book`, `article`, `attachment`. Always present |
+| `beresta:subtitle` | inside `beresta:book` | Subtitle, a string. Empty means absent |
+| `beresta:publisher` | inside `beresta:book` | Publisher, a string. Empty means absent |
+| `beresta:language` | inside `beresta:book` | Language as written in the card. Empty means absent |
+| `beresta:series` | inside `beresta:book` | Series name. Empty means absent |
+| `beresta:published` | inside `beresta:book` | Publication day, `YYYY-MM-DD` in UTC: a day, not a moment |
+| `beresta:seriesIndex` | inside `beresta:book` | Number in the series. Absent without a series |
+| `beresta:bookTags` | inside `beresta:book` | Tags of the BOOK itself, by name. Highlight tags live on highlights (`TextualBody` with `purpose: tagging`) |
+| `beresta:collections` | inside `beresta:book` | Names of the live collections the book is on |
+| `beresta:readStatus` | inside `beresta:book` | Reading status: `unread`, `inbox`, `reading`, `paused`, `stopped`, `read`. Always present |
+| `beresta:rating` | inside `beresta:book` | The reader's rating, an integer |
+| `beresta:addedAt` | inside `beresta:book` | When added to the library, ISO 8601 in UTC. Always present |
+| `beresta:finishedAt` | inside `beresta:book` | When the book was finished, ISO 8601 in UTC |
 | `beresta:removed` | collection | Tombstones of softly deleted highlights |
 | `beresta:deletedAt` | inside `beresta:removed` | The moment of soft deletion, ISO 8601 |
 | `beresta:type` | highlight | The kind of mark: `highlight`, `underline`, `note`, `text`, `area`, `ink`. The W3C model has no place for it: `motivation` answers a different question, and `highlight` and `underline` would collapse into one `highlighting` |

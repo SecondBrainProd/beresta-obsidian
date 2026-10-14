@@ -139,7 +139,17 @@ export class FakeVault implements WatchSource, NoteStore {
    * вид, что не трогает, значило бы спрятать от проверок ровно ту побудку
    * чужой синхронизации, которой мы стараемся не устраивать.
    */
+  /**
+   * Что сделать с файлом ДО того, как `process` его прочтёт, — щель между
+   * чтением прохода и записью под замком, в которую человек успевает
+   * поправить заметку. Срабатывает один раз.
+   */
+  beforeProcess: ((path: string) => void) | undefined;
+
   async process(path: string, revise: (onDisk: string) => string): Promise<void> {
+    const hook = this.beforeProcess;
+    this.beforeProcess = undefined;
+    hook?.(path);
     const before = this.files.get(path);
     if (before === undefined) throw new Error(`нет заметки: ${path}`);
     this.writes.push(path);

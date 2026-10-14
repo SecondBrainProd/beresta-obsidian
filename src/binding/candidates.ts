@@ -53,7 +53,7 @@
  * о книге.
  */
 
-import { readBookIds } from "../merge/frontmatter";
+import { frontmatterValues, readBookIds, splitFrontmatter } from "../merge/frontmatter";
 import type { SnapshotBook } from "../snapshot/model";
 
 /** Заметка хранилища в том виде, в каком её видит подбор. */
@@ -225,10 +225,12 @@ export function identify(note: VaultNote): NoteIdentity {
   const base = basename(note.path);
   if (base !== "") titles.add(base, "filename");
 
-  const block = frontmatterBlock(lines);
-  for (const value of yamlValues(block, "name")) titles.add(value, "declared");
-  for (const value of yamlValues(block, "aliases")) titles.add(value, "declared");
-  for (const value of yamlValues(block, "author")) pushAuthors(authors, value);
+  const block = splitFrontmatter(lines).frontmatter ?? [];
+  const declared = (key: string): string[] =>
+    frontmatterValues(block, key).filter((value) => value !== "");
+  for (const value of declared("name")) titles.add(value, "declared");
+  for (const value of declared("aliases")) titles.add(value, "declared");
+  for (const value of declared("author")) pushAuthors(authors, value);
 
   for (const raw of lines) {
     const line = raw.trim();
@@ -477,50 +479,6 @@ function isServiceHeading(heading: string): boolean {
 
 function kindOfCategory(category: string): WorkKind {
   return category.toLowerCase() === "books" ? "book" : "article";
-}
-
-/** Строки блока frontmatter, если он есть. */
-function frontmatterBlock(lines: readonly string[]): string[] {
-  if (lines.length === 0 || !/^---[\t \r]*$/.test(lines[0] ?? "")) return [];
-  for (let index = 1; index < lines.length; index += 1) {
-    if (/^---[\t \r]*$/.test(lines[index] ?? "")) return lines.slice(0, index + 1);
-  }
-  return [];
-}
-
-/** Значения ключа верхнего уровня: скаляр, `[a, b]` или блочный список. */
-function yamlValues(block: readonly string[], key: string): string[] {
-  const values: string[] = [];
-  for (let index = 1; index < block.length - 1; index += 1) {
-    const match = new RegExp(`^${key}:(.*)$`).exec(block[index] ?? "");
-    if (match === null) continue;
-    const inline = match[1].trim();
-    if (inline.startsWith("[")) {
-      for (const item of inline.replace(/^\[/, "").replace(/\]$/, "").split(",")) {
-        const clean = unquote(item.trim());
-        if (clean !== "") values.push(clean);
-      }
-    } else if (inline !== "") {
-      values.push(unquote(inline));
-    } else {
-      for (let next = index + 1; next < block.length - 1; next += 1) {
-        const item = (block[next] ?? "").trim();
-        if (!item.startsWith("- ")) break;
-        const clean = unquote(item.slice(2).trim());
-        if (clean !== "") values.push(clean);
-      }
-    }
-    break;
-  }
-  return values;
-}
-
-function unquote(value: string): string {
-  if (value.length >= 2 && (value.startsWith('"') || value.startsWith("'"))) {
-    const quote = value[0];
-    if (value.endsWith(quote)) return value.slice(1, -1);
-  }
-  return value;
 }
 
 /**

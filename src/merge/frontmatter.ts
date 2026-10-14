@@ -94,6 +94,17 @@ export function readScalar(text: string, key: string): string | undefined {
   return values[0];
 }
 
+/**
+ * Значения ключа верхнего уровня в блоке frontmatter (строки вместе с
+ * чертами): скаляр, `[a, b]` или блочный список. Единственный разбор YAML в
+ * плагине — им же читает поиск кандидатов привязки (`binding/candidates.ts`);
+ * второй, свой, был там до 20261013 и расходился с этим в краях.
+ */
+export function frontmatterValues(block: readonly string[], key: string): string[] {
+  const found = findKey(block, key);
+  return found === undefined ? [] : readValues(block, found);
+}
+
 /** Что положить в frontmatter этим проходом. Пустое поле — не трогать ключ. */
 export interface FrontmatterPatch {
   readonly bookIds?: readonly string[];

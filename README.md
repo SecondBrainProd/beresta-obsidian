@@ -73,7 +73,7 @@ Read that as four separate rules.
 
 The callout title is the chapter path from the book's table of contents; where there is no path it degrades to the book title, and where there is neither it degrades to a bare callout rather than to an empty heading. A highlight with no quotable text — an ink stroke on a PDF page — says so in words instead of rendering an empty quote. A highlight without your own note gets no separator, no subheading and no blank line.
 
-The layout is a template you can edit. It is a deliberately small language: substitute a value, repeat a block per highlight, show a block when a value is non-empty. There are no expressions and no function calls in it. A mistake in your template — an unknown name, an unclosed block, a stray brace — is reported in words and **stops the write**: a broken template cannot produce a half-rendered section, because it produces nothing at all.
+The layout is a template you can edit. It is a small language in the spirit of Zotero Integration: substitute a value (`{{ title }}`, `{{ a.text }}`), repeat a block per highlight (`{{#annotations}}…{{/annotations}}` or `{% for a in annotations %}…{% endfor %}` with `loop.first`/`loop.last`), show a block on a condition (`{% if series %}…{% elif %}…{% else %}…{% endif %}`), and shape values with filters — `format("YYYY")`, `capitalize`, `upper`, `lower`, `replace("a", "b")`, `join(", ")`, `default("…")`, `yaml` for front-matter values. There are no arithmetic expressions and no function calls beyond these filters. Since 0.2.1 you can also define **note formats** in the settings: a format has a name, a note template file, a highlight-section template file and a path pattern (`Library/{{ title }}.md`); each format gets a “New note — <format>” command, a note remembers its format in `beresta-format`, and a button puts ready-made “Book”, “Article” and section templates into `Templates/`. A mistake in your template — an unknown name, an unclosed block, a stray brace — is reported in words and **stops the write**: a broken template cannot produce a half-rendered section, because it produces nothing at all.
 
 **If a note is open with unsaved changes, the plugin defers writing it and says so.** This is not caution, it is a measurement: `vault.process` hands the writer the text *on disk*, not the text on your screen, so writing at that moment splices your unsaved line into the middle of a machine-generated block. Nothing is lost — but the block's checksum no longer matches, the next pass reads that as "the human edited this block", and freezes it for good. Deferring costs nothing: the snapshot is still there on the next pass, when your buffer is saved.
 
@@ -83,7 +83,7 @@ The layout is a template you can edit. It is a deliberately small language: subs
 
 **Nothing is bound automatically.** Books are matched to notes by a command, in a window, one book at a time, with the candidates ranked and the machine-generated exports (Readwise and friends) marked as such and pushed to the bottom. There is no "bind when the match is exact" threshold, because on real data the exact match is sometimes the *wrong* note: a Readwise export can match a book title more precisely than the note you wrote by hand. The binding lives in the note's frontmatter (`beresta-book-id`, always a list), so renaming or moving the note keeps it — and so does the plugin's claim on the blocks it wrote, which is in the note too.
 
-**Six commands, and each of them is something the plugin will not do on its own:**
+**Six standing commands plus one per note format, and each of them is something the plugin will not do on its own:**
 
 | Command | What it does |
 | --- | --- |
@@ -93,6 +93,8 @@ The layout is a template you can edit. It is a deliberately small language: subs
 | Return the Beresta section to this note (Вернуть секцию Beresta в эту заметку) | Re-creates a managed section you deleted |
 | Confirm removing blocks from this note (Подтвердить удаление блоков в этой заметке) | Releases the safety catch when a pass would remove a lot of blocks |
 | Restore an earlier version of this note (Восстановить прежнюю версию этой заметки) | Rolls the note back to one of the backups taken before a write |
+| New note — <format> (Новая заметка — <формат>) | One command per format in the settings: pick a book, get a note from the format's template |
+| Assign a format to this note (Назначить формат этой заметке) | Writes `beresta-format` into an already bound note and redraws its blocks |
 
 **The conflicts panel is not an alarm.** A conflict here means you edited a quote and the app changed the same quote — an ordinary event, not a failure. Those blocks stay yours and stop being redrawn; the app's newer version arrives as a folded callout above your text. The panel exists so you know which blocks went quiet, because otherwise you find out six months later.
 

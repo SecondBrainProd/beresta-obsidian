@@ -14,6 +14,7 @@ import {
   SnapshotTooNew,
   readSnapshot,
   sha256Hex,
+  shardFileName,
   type Snapshot,
   type SnapshotSource,
 } from "../src/snapshot";
@@ -282,6 +283,16 @@ describe("разбор снимка на образцах Swift", () => {
       expect(path === ".beresta/index.json" || path.startsWith(".beresta/books/")).toBe(true);
       expect(path).not.toContain("..");
     }
+  });
+
+  // Находка ультраревью 14 (разбор 20260906): сторож знал только прямую
+  // косую. На Windows обратная — тоже разделитель пути, и строка указателя
+  // `books/..\..\.obsidian\…` вывела бы чтение за папку снимка. Верните
+  // проверку одной лишь `/` — тест обязан упасть.
+  test("обратная косая в имени осколка — не наш файл", () => {
+    expect(shardFileName("books/..\\..\\.obsidian\\plugins\\чужой\\data.json")).toBeUndefined();
+    expect(shardFileName("books/вложенная\\папка.jsonld")).toBeUndefined();
+    expect(shardFileName("books/Йод.jsonld")).toBe("Йод.jsonld");
   });
 
   test("файл не в UTF-8 — это не «прочитали со звёздочкой»", async () => {

@@ -12,9 +12,27 @@
 
 import { Modal, type App } from "obsidian";
 
-import type { BackupRecord } from "../write/backup";
+import { BACKUP_INDEX, type BackupIndexState, type BackupRecord } from "../write/backup";
 import { interfaceLanguage } from "../render/defaults";
 import { counted, fill, panelWords, type PanelWords } from "./words";
+
+/**
+ * Строка беды об испорченном указателе копий — или `undefined`, если беды нет.
+ *
+ * Без неё окно молча показывало бы неполный список, и человек решил бы, что
+ * прежних версий нет. Испорченный сейчас — это сам `index.json`; отложенные —
+ * то, что `rememberBefore` сохранил рядом, прежде чем писать новый.
+ */
+export function backupTroubleLine(
+  state: BackupIndexState,
+  folder: string,
+  say: PanelWords["pass"],
+): string | undefined {
+  const files = [...state.setAside];
+  if (state.kind === "broken") files.unshift(BACKUP_INDEX.slice(BACKUP_INDEX.lastIndexOf("/") + 1));
+  if (files.length === 0) return undefined;
+  return fill(say.backupIndexTrouble, { folder, files: files.join(", ") });
+}
 
 export class BackupModal extends Modal {
   constructor(
@@ -22,6 +40,7 @@ export class BackupModal extends Modal {
     private readonly path: string,
     private readonly records: readonly BackupRecord[],
     private readonly restore: (id: string) => void,
+    private readonly trouble?: string,
   ) {
     super(app);
   }
@@ -36,6 +55,7 @@ export class BackupModal extends Modal {
     titleEl.setText(this.words.pass.backupTitle);
     contentEl.empty();
     contentEl.createEl("p", { text: this.path });
+    if (this.trouble !== undefined) contentEl.createEl("p", { text: this.trouble });
 
     if (this.records.length === 0) {
       contentEl.createEl("p", {

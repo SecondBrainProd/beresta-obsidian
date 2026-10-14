@@ -7,10 +7,13 @@ import {
   BACKUP_FOLDER,
   BACKUP_INDEX,
   listBackups,
+  readBackupIndex,
   rememberBefore,
   restoreBackup,
   type BackupStore,
 } from "../src/write/backup";
+import { backupTroubleLine } from "../src/ui/backup-modal";
+import { panelWords } from "../src/ui/words";
 
 /**
  * Запасная копия перед КАЖДОЙ записью в чужой файл.
@@ -186,6 +189,111 @@ describe("запасная копия", () => {
 
     expect(record).toBeDefined();
     for (const key of files) expect(store.files.has(key)).toBe(true);
+  });
+
+  /**
+   * «Не прочлось» — не «копий нет». Находка ультраревью (разбор 20260906):
+   * указатель, который не разобрался, читался пустым, и следующая запись
+   * переписывала его одной новой строкой — прежние копии оставались файлами,
+   * но из окна версий и из круга уборки пропадали навсегда. Прежняя проверка
+   * выше держала ФАЙЛЫ и была зелёной на этой беде. Вырежьте откладывание
+   * испорченного указателя — тест обязан упасть.
+   */
+  test("испорченный указатель откладывается рядом, а не затирается", async () => {
+    const store = memoryStore();
+    await rememberBefore(store, {
+      path: NOTE,
+      text: "первая версия",
+      savedAt: "20260812 1647",
+      stamp: "20260812-164701",
+    });
+    store.files.set(BACKUP_INDEX, "{это не JSON");
+
+    await rememberBefore(store, {
+      path: NOTE,
+      text: "вторая версия",
+      savedAt: "20260812 1648",
+      stamp: "20260812-164802",
+    });
+
+    const aside = [...store.files.keys()].filter((key) => /^backups\/index-broken-.*\.json$/.test(key));
+    expect(aside).toHaveLength(1);
+    expect(store.files.get(aside[0]!)).toBe("{это не JSON");
+    const state = await readBackupIndex(store);
+    expect(state.kind).toBe("ok");
+    expect(state.setAside).toEqual([aside[0]!.slice(`${BACKUP_FOLDER}/`.length)]);
+  });
+
+  // Одна негодная строка — не повод забыть остальные. Вырежьте разбор по
+  // строкам (весь указатель — «испорчен») — тест обязан упасть.
+  test("негодная строка указателя не стирает годные", async () => {
+    const store = memoryStore();
+    const first = await rememberBefore(store, {
+      path: NOTE,
+      text: "первая версия",
+      savedAt: "20260812 1647",
+      stamp: "20260812-164701",
+    });
+    const index = JSON.parse(store.files.get(BACKUP_INDEX)!) as { backups: unknown[] };
+    // Копия без длины — например, записанная будущей версией плагина.
+    index.backups.push({ id: "20260812-160000-0000abcd.md", path: OTHER, savedAt: "20260812 1600" });
+    store.files.set(BACKUP_INDEX, JSON.stringify(index));
+
+    await rememberBefore(store, {
+      path: NOTE,
+      text: "вторая версия",
+      savedAt: "20260812 1648",
+      stamp: "20260812-164802",
+    });
+
+    const mine = await listBackups(store, NOTE);
+    expect(mine.map((one) => one.id)).toContain(first!.id);
+    expect(mine).toHaveLength(2);
+    expect((await readBackupIndex(store)).setAside).toHaveLength(1);
+  });
+});
+
+/**
+ * Окно версий обязано сказать об испорченном указателе — иначе неполный
+ * список читается как «прежних версий нет». Вырежьте строку беды
+ * (`backupTroubleLine` всегда `undefined`) — тест обязан упасть.
+ */
+describe("строка беды в окне версий", () => {
+  const folder = ".obsidian/plugins/beresta/backups";
+
+  test("испорченный указатель называется, папка копий — тоже", async () => {
+    const store = memoryStore();
+    store.files.set(BACKUP_INDEX, "{это не JSON");
+    for (const language of ["ru", "en"] as const) {
+      const line = backupTroubleLine(await readBackupIndex(store), folder, panelWords(language).pass);
+      expect(line).toBeDefined();
+      expect(line).toContain(folder);
+      expect(line).toContain("index.json");
+    }
+  });
+
+  test("отложенный прежде указатель называется по имени", async () => {
+    const store = memoryStore();
+    store.files.set(BACKUP_INDEX, "{это не JSON");
+    await rememberBefore(store, {
+      path: NOTE,
+      text: "версия",
+      savedAt: "20260812 1647",
+      stamp: "20260812-164701",
+    });
+    const line = backupTroubleLine(await readBackupIndex(store), folder, panelWords("ru").pass);
+    expect(line).toContain("index-broken-20260812-164701.json");
+  });
+
+  test("здоровый указатель — без строки беды", async () => {
+    const store = memoryStore();
+    await rememberBefore(store, {
+      path: NOTE,
+      text: "версия",
+      savedAt: "20260812 1647",
+      stamp: "20260812-164701",
+    });
+    expect(backupTroubleLine(await readBackupIndex(store), folder, panelWords("ru").pass)).toBeUndefined();
   });
 });
 

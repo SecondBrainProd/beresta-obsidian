@@ -410,6 +410,45 @@ describe("подбор кандидатов", () => {
   });
 });
 
+// MARK: - Следы из frontmatter
+
+/**
+ * Названия и автор из frontmatter узнаются сами по себе — без имени файла и
+ * заголовка, которые в образцах выше всегда совпадают с `name:`. Рез
+ * 20261013 (разбор frontmatter отвечает пустым) оставил все проверки
+ * привязки зелёными: следы frontmatter не проверялись вовсе. Вырежьте
+ * чтение ключей frontmatter — этот тест обязан упасть.
+ */
+describe("следы из frontmatter", () => {
+  test("aliases блочным списком и в скобках, name и author узнаются", () => {
+    const note = identify({
+      path: `${LIB}/конспект-17.md`,
+      text: [
+        "---",
+        "name: Цель как проект",
+        "aliases:",
+        "  - \"12 недель в году\"",
+        "  - ",
+        "author: \"[[Брайан Моран]], Майкл Леннингтон\"",
+        "---",
+        "Просто мысли.",
+        "",
+      ].join("\n"),
+    });
+    const declared = note.titles.filter((one) => one.source === "declared").map((one) => one.value);
+    expect(declared).toEqual(expect.arrayContaining(["Цель как проект", "12 недель в году"]));
+    expect(declared).not.toContain("");
+    expect(note.authors).toEqual(expect.arrayContaining(["Брайан Моран"]));
+
+    const inline = identify({
+      path: `${LIB}/конспект-18.md`,
+      text: "---\naliases: [Тихая инженерия, 'Quiet Engineering']\n---\n",
+    });
+    const both = inline.titles.filter((one) => one.source === "declared").map((one) => one.value);
+    expect(both).toEqual(expect.arrayContaining(["Тихая инженерия", "Quiet Engineering"]));
+  });
+});
+
 // MARK: - Признак машинной заметки
 
 describe("признак машинной заметки", () => {

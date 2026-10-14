@@ -68,6 +68,28 @@ export interface SettingsWords {
   readonly resetTemplate: string;
   readonly folderName: string;
   readonly folderDescription: string;
+  /** Форматы заметок (план шаблонов, задачи 3 и 6). */
+  readonly formats: {
+    readonly heading: string;
+    readonly description: string;
+    /** `{index}` — номер формата по порядку. */
+    readonly formatHeading: string;
+    readonly name: string;
+    readonly noteTemplate: string;
+    readonly blockTemplate: string;
+    /** Что такое файл шаблона секции: цикл по выпискам, `{{anchor}}`, живой образец. */
+    readonly blockTemplateDescription: string;
+    readonly pathPattern: string;
+    readonly add: string;
+    readonly remove: string;
+    readonly addDefaults: string;
+    readonly addDefaultsDescription: string;
+    /** `{files}` — какие файлы созданы. */
+    readonly defaultsCreated: string;
+    /** `{files}` — какие файлы уже были и не тронуты. */
+    readonly defaultsKept: string;
+    readonly nameTaken: string;
+  };
 }
 
 /** Форма слова при числе. В русском три («книга», «книги», «книг»), в английском две. */
@@ -221,6 +243,11 @@ export interface PassWords {
   readonly backupExplained: string;
   /** `{savedAt}` и `{count}` знаков. */
   readonly backupRecord: CountForms;
+  /**
+   * Указатель копий был испорчен: `{folder}` — папка копий, `{files}` — имена
+   * испорченных указателей (отложенных рядом или ещё лежащих на месте).
+   */
+  readonly backupIndexTrouble: string;
   /** Отказы по маркерам секции: `{begins}` и `{ends}` — сколько нашлось. */
   readonly markersExtraPair: string;
   readonly markersOpeningOnly: string;
@@ -241,6 +268,17 @@ export interface PassWords {
   readonly templateUnclosed: string;
   readonly templateBrokenBraces: string;
   readonly templateUnknownName: string;
+  /**
+   * Подстановщик второй версии (план шаблонов, задача 2): `{line}` — номер
+   * строки шаблона, `{message}` — что не так, `{name}` — имя фильтра или метки,
+   * `{tag}` — метка как написана, `{known}` — что есть.
+   */
+  readonly templateAtLine: string;
+  readonly templateUnknownFilter: string;
+  readonly templateBadTag: string;
+  readonly templateUnexpectedTag: string;
+  readonly templateUnclosedStatement: string;
+  readonly templateBadExpression: string;
   /** `{count}` строк-маркеров в отрисованной секции вместо двух. */
   readonly sectionMarkers: string;
   readonly sectionDuplicateAnchor: string;
@@ -269,6 +307,28 @@ export interface PanelWords {
     readonly returnSection: string;
     readonly confirmRemovals: string;
     readonly restoreVersion: string;
+  };
+  /**
+   * Форматы заметок (план `20261008-шаблоны-плагина-план.md`, задачи 4–5).
+   * `{format}` — имя формата, `{path}` — путь в хранилище, `{message}` — слова
+   * ошибки шаблона.
+   */
+  readonly formats: {
+    readonly newNote: string;
+    readonly assignFormat: string;
+    readonly pickBook: string;
+    readonly pickFormat: string;
+    readonly noFormat: string;
+    readonly templateMissing: string;
+    readonly blockNoAnchor: string;
+    readonly noteExists: string;
+    readonly allBound: string;
+    readonly noteFailed: string;
+    readonly formatAssigned: string;
+    /** `{path}` — заведённая заметка (команда палитры, Н10 приёмки 20261012). */
+    readonly noteCreated: string;
+    /** `{format}` — имя, которого в настройках больше нет; `{paths}` — заметки с ним (Н4). */
+    readonly formatGone: string;
   };
   /** Уведомления в углу окна. Каждое начинается с «Beresta:» — их источник виден сразу. */
   readonly notices: {
@@ -390,6 +450,10 @@ const RUSSIAN: PanelWords = {
       few: "{savedAt} — {count} знака",
       many: "{savedAt} — {count} знаков",
     },
+    backupIndexTrouble:
+      "Указатель копий был испорчен, и часть прежних версий в этом списке может " +
+      "быть не видна. Сами копии не тронуты — они лежат файлами в папке {folder}; " +
+      "испорченный указатель сохранён там же ({files}).",
     markersExtraPair:
       "В заметке {begins} открывающих и {ends} закрывающих маркеров Beresta вместо " +
       "одной пары. Где кончается наша часть заметки, отсюда не видно, а угадывать " +
@@ -426,6 +490,12 @@ const RUSSIAN: PanelWords = {
       "или «{{/имя}}», имя из латинских букв и цифр",
     templateUnknownName:
       "шаблон просит «{name}» ({where}), а такого значения здесь нет. Доступны: {known}",
+    templateAtLine: "строка {line}: {message}",
+    templateUnknownFilter: "фильтра «{name}» нет. Есть: {known}",
+    templateBadTag: "метка «{tag}» не разбирается",
+    templateUnexpectedTag: "метка «{tag}» стоит без своего начала",
+    templateUnclosedStatement: "не закрыт «{tag}» — нужен «{closing}»",
+    templateBadExpression: "в метке «{tag}» не разбирается выражение: {reason}",
     sectionMarkers:
       "в отрисованной секции {count} строк-маркеров вместо двух. Так бывает, если " +
       "строка маркера встретилась в тексте выписки или её дописали в шаблон: секция " +
@@ -669,6 +739,26 @@ const RUSSIAN: PanelWords = {
     confirmRemovals: "Подтвердить удаление блоков в этой заметке",
     restoreVersion: "Восстановить прежнюю версию этой заметки",
   },
+  formats: {
+    newNote: "Новая заметка — {format}",
+    assignFormat: "Назначить формат этой заметке",
+    pickBook: "Книга для новой заметки «{format}»",
+    pickFormat: "Формат заметки",
+    noFormat: "Без формата — как прежде",
+    templateMissing:
+      "Beresta: файл шаблона «{path}» не читается — проверьте путь в настройках формата «{format}».",
+    blockNoAnchor:
+      "Beresta: в шаблоне блока «{path}» нет {{anchor}} — без якоря правки в заметке не узнаются. " +
+      "Блоки рисуются стандартным шаблоном, пока его не поправят.",
+    noteExists: "Beresta: заметка «{path}» уже есть — открываю её, новую не завожу.",
+    allBound: "Beresta: у всех книг выгрузки заметки уже есть.",
+    noteFailed: "Beresta: заметка не создана — {message}",
+    formatAssigned: "Beresta: заметке назначен формат «{format}» — блоки перерисованы.",
+    noteCreated: "Beresta: заведена заметка «{path}».",
+    formatGone:
+      "Beresta: формата «{format}» в настройках больше нет, а его помнят заметки: {paths}. " +
+      "Блоки в них рисуются стандартным шаблоном — назначьте им другой формат командой.",
+  },
   notices: {
     passFailed: "Beresta: проход не удался — {message}",
     choiceNotApplied:
@@ -745,11 +835,39 @@ const RUSSIAN: PanelWords = {
     folderMissing:
       "Папки «{folder}» в хранилище нет — Beresta заведёт её, когда вы впервые скажете " +
       "«создать новую заметку».",
+    formats: {
+      heading: "Форматы заметок",
+      description:
+        "Как в Zotero Integration: у формата своё имя, шаблон заметки, шаблон блока " +
+        "выписки и образец пути. Шаблоны — файлами в хранилище. На каждый формат в " +
+        "палитре команд появляется «Новая заметка — <формат>». Пустой путь — как прежде.",
+      formatHeading: "Формат {index}",
+      name: "Имя формата",
+      noteTemplate: "Файл шаблона заметки",
+      blockTemplate: "Файл шаблона секции выписок",
+      blockTemplateDescription:
+        "Файл — шаблон ВСЕЙ секции, как стандартный ниже: заголовок, мысль о книге " +
+        "и цикл по выпискам — {{#annotations}}…{{/annotations}} или " +
+        "{% for a in annotations %}…{% endfor %}; внутри цикла {{text}}, {{caption}}, " +
+        "{{comment}}, {{color}} и прочие, {{anchor}} обязателен. Проще всего начать с " +
+        "копии стандартного: кнопка готовых форматов кладёт её в Templates/.",
+      pathPattern: "Образец пути новой заметки, например Библиотека/{{title}}.md",
+      add: "Добавить формат",
+      remove: "Убрать формат",
+      addDefaults: "Добавить готовые форматы «Книга» и «Статья»",
+      addDefaultsDescription:
+        "Положит два файла шаблонов в Templates/ и заведёт два формата. Существующие " +
+        "файлы не перезаписываются.",
+      defaultsCreated: "Созданы: {files}.",
+      defaultsKept: "Уже были и не тронуты: {files}.",
+      nameTaken: "Формат с таким именем уже есть — имена должны различаться.",
+    },
     templateName: "Шаблон секции выписок",
     templateDescription:
-      "Как выглядит блок одной выписки в заметке. Пусто — как у всех: " +
-      "стандартный шаблон, который будет улучшаться с новыми версиями. " +
-      "Доступные значения: {{text}}, {{comment}}, {{caption}}, {{heading}}, " +
+      "Как выглядит секция выписок в заметке целиком: заголовок, мысль о книге и " +
+      "цикл {{#annotations}}…{{/annotations}} с блоком одной выписки внутри. Пусто — " +
+      "как у всех: стандартный шаблон, который будет улучшаться с новыми версиями. " +
+      "Внутри цикла: {{text}}, {{comment}}, {{caption}}, {{heading}}, " +
       "{{tags}}, {{link}}, {{page}}, {{date}}, {{color}} и другие; список " +
       "целиком плагин покажет в ошибке, если ошибётесь в имени. " +
       "{{anchor}} обязателен — им держится связь блока с выпиской.",
@@ -840,6 +958,10 @@ const ENGLISH: PanelWords = {
       few: "{savedAt} — {count} characters",
       many: "{savedAt} — {count} characters",
     },
+    backupIndexTrouble:
+      "The index of copies was damaged, so some earlier versions may be missing from " +
+      "this list. The copies themselves are untouched — they are files in the {folder} " +
+      "folder; the damaged index is kept there too ({files}).",
     markersExtraPair:
       "The note has {begins} opening and {ends} closing Beresta markers instead of one " +
       "pair. Where our part of the note ends cannot be seen from here, and guessing " +
@@ -877,6 +999,12 @@ const ENGLISH: PanelWords = {
     templateUnknownName:
       "the template asks for “{name}” ({where}), and there is no such value here. " +
       "Available: {known}",
+    templateAtLine: "line {line}: {message}",
+    templateUnknownFilter: "there is no filter “{name}”. Available: {known}",
+    templateBadTag: "the tag “{tag}” cannot be parsed",
+    templateUnexpectedTag: "the tag “{tag}” has no opening",
+    templateUnclosedStatement: "“{tag}” is not closed — “{closing}” is needed",
+    templateBadExpression: "the expression in “{tag}” cannot be parsed: {reason}",
     sectionMarkers:
       "the rendered section has {count} marker lines instead of two. This happens when a " +
       "marker line appears in a highlight’s text or was added to the template: the " +
@@ -1118,6 +1246,26 @@ const ENGLISH: PanelWords = {
     confirmRemovals: "Confirm removing blocks from this note",
     restoreVersion: "Restore an earlier version of this note",
   },
+  formats: {
+    newNote: "New note — {format}",
+    assignFormat: "Assign a format to this note",
+    pickBook: "Book for the new “{format}” note",
+    pickFormat: "Note format",
+    noFormat: "No format — as before",
+    templateMissing:
+      "Beresta: the template file “{path}” cannot be read — check the path in the “{format}” format settings.",
+    blockNoAnchor:
+      "Beresta: the block template “{path}” has no {{anchor}} — without it your edits are not recognised. " +
+      "Blocks use the standard template until it is fixed.",
+    noteExists: "Beresta: the note “{path}” already exists — opening it instead of creating a new one.",
+    allBound: "Beresta: every book in the export already has a note.",
+    noteFailed: "Beresta: the note was not created — {message}",
+    formatAssigned: "Beresta: the note now uses the “{format}” format — blocks redrawn.",
+    noteCreated: "Beresta: created the note “{path}”.",
+    formatGone:
+      "Beresta: the “{format}” format is no longer in the settings, but these notes still name it: {paths}. " +
+      "Their blocks use the standard template — assign them another format with the command.",
+  },
   notices: {
     passFailed: "Beresta: the pass failed — {message}",
     choiceNotApplied:
@@ -1195,11 +1343,39 @@ const ENGLISH: PanelWords = {
     folderMissing:
       "There is no folder “{folder}” in the vault — Beresta will create it the first " +
       "time you choose “create a new note”.",
+    formats: {
+      heading: "Note formats",
+      description:
+        "As in Zotero Integration: a format has its own name, note template, highlight " +
+        "block template and path pattern. Templates are files in the vault. Each format " +
+        "gets a “New note — <format>” command in the palette. An empty path means as before.",
+      formatHeading: "Format {index}",
+      name: "Format name",
+      noteTemplate: "Note template file",
+      blockTemplate: "Highlight section template file",
+      blockTemplateDescription:
+        "The file is a template of the WHOLE section, like the standard one below: a heading, " +
+        "the thought on the book and a loop over highlights — {{#annotations}}…{{/annotations}} " +
+        "or {% for a in annotations %}…{% endfor %}; inside the loop {{text}}, {{caption}}, " +
+        "{{comment}}, {{color}} and the rest, {{anchor}} is required. The easiest start is a " +
+        "copy of the standard one: the ready-made formats button puts it into Templates/.",
+      pathPattern: "New note path pattern, e.g. Library/{{title}}.md",
+      add: "Add a format",
+      remove: "Remove the format",
+      addDefaults: "Add ready-made “Book” and “Article” formats",
+      addDefaultsDescription:
+        "Puts two template files into Templates/ and adds two formats. Existing files " +
+        "are never overwritten.",
+      defaultsCreated: "Created: {files}.",
+      defaultsKept: "Already there and untouched: {files}.",
+      nameTaken: "A format with this name already exists — names must differ.",
+    },
     templateName: "Highlight section template",
     templateDescription:
-      "How the block of one highlight looks in the note. Empty means the same as for " +
-      "everyone: the standard template, which will improve with new versions. " +
-      "Available values: {{text}}, {{comment}}, {{caption}}, {{heading}}, " +
+      "How the whole highlight section looks in the note: a heading, the thought on the " +
+      "book and a {{#annotations}}…{{/annotations}} loop with one highlight's block inside. " +
+      "Empty means the same as for everyone: the standard template, which will improve " +
+      "with new versions. Inside the loop: {{text}}, {{comment}}, {{caption}}, {{heading}}, " +
       "{{tags}}, {{link}}, {{page}}, {{date}}, {{color}} and others; the plugin " +
       "shows the full list in the error if you misspell a name. " +
       "{{anchor}} is required — it keeps the block tied to its highlight.",

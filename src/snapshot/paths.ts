@@ -72,6 +72,8 @@ export function shardFileName(file: string): string | undefined {
   if (!file.startsWith(prefix)) return undefined;
   const name = file.slice(prefix.length);
   if (name === "" || name === "." || name === "..") return undefined;
-  if (name.includes("/")) return undefined;
+  // Обратная косая — разделитель пути на Windows: `books/..\..\x` там вышло
+  // бы за папку снимка. Находка ультраревью 14, разбор 20260906.
+  if (name.includes("/") || name.includes("\\")) return undefined;
   return name;
 }

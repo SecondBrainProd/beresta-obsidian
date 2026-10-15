@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 /**
  * Язык интерфейса — у самого Obsidian (`getLanguage()`, ревью каталога
- * 20260927), а без него (Obsidian до 1.8) — из настроек, как раньше.
+ * 20260927), и только у него: с 0.3.2 `minAppVersion` 1.8.7, запасного пути
+ * через настройки нет.
  *
  * Хранилище настроек в узле подставное — тем же приёмом, что в
  * `note-language.test.ts`: у узла своего `localStorage` нет.
@@ -36,11 +37,12 @@ describe("язык интерфейса", () => {
     expect(interfaceLanguage(), "язык взят не у приложения").toBe("de");
   });
 
-  it("без getLanguage (старый Obsidian) читает настройки", async () => {
-    vi.doMock("obsidian", () => ({}));
+  // С 0.3.2 настройки не читаются вовсе (minAppVersion 1.8.7, ревью каталога).
+  it("приложение ответило пустотой — английский, даже если в настройках другой", async () => {
+    vi.doMock("obsidian", () => ({ getLanguage: () => "" }));
     pretendSettings("ru");
     const { interfaceLanguage } = await import("../src/render/defaults");
-    expect(interfaceLanguage()).toBe("ru");
+    expect(interfaceLanguage()).toBe("en");
   });
 
   it("приложение ответило пустотой, настроек нет — английский", async () => {

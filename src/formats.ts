@@ -130,7 +130,7 @@ export class FormatTemplates {
 function withoutSlashes(values: Record<string, TemplateValue>): Record<string, TemplateValue> {
   const clean = (value: TemplateValue): TemplateValue =>
     typeof value === "string"
-      ? value.replace(/[\/\\]/g, "-")
+      ? value.replace(/[/\\]/g, "-")
       : Array.isArray(value)
         ? (value as readonly TemplateValue[]).map(clean)
         : value;

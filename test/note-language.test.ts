@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 
-import { stripWarning, warningHead, type KnownSection } from "../src/merge/fuse";
+import { hashLines, stripWarning, warningHead, type KnownSection } from "../src/merge/fuse";
 import { DEFAULT_TEMPLATE, defaultTemplate, interfaceLanguage } from "../src/render/defaults";
 import { renderSection } from "../src/render/section";
 import { noteWords } from "../src/render/words";
@@ -49,14 +49,14 @@ describe("Слова заметки по языку интерфейса", () =>
   test("русский интерфейс — русский заголовок", () => {
     pretendLanguage("ru");
     expect(interfaceLanguage()).toBe("ru");
-    expect(defaultTemplate()).toContain("## Выписки из Beresta");
+    expect(defaultTemplate()).toContain("## Хайлайты из Beresta");
     expect(defaultTemplate()).not.toContain("Highlights from Beresta");
   });
 
   test("английский интерфейс — английский заголовок", () => {
     pretendLanguage("en");
     expect(defaultTemplate()).toContain("## Highlights from Beresta");
-    expect(defaultTemplate()).not.toContain("Выписки из Beresta");
+    expect(defaultTemplate()).not.toContain("Хайлайты из Beresta");
   });
 
   // ⚠️ Obsidian держит английский интерфейс ОТСУТСТВИЕМ записи, а не словом
@@ -102,7 +102,7 @@ describe("Слова заметки по языку интерфейса", () =>
       .map((line, at) => (line === english[at] ? undefined : at))
       .filter((at): at is number => at !== undefined);
     expect(differing.length).toBe(2);
-    expect(russian[differing[0]]).toBe("## Выписки из Beresta");
+    expect(russian[differing[0]]).toBe("## Хайлайты из Beresta");
     expect(english[differing[0]]).toBe("## Highlights from Beresta");
     expect(russian[differing[1]]).toContain("**Мысль.**");
     expect(english[differing[1]]).toContain("**Thought.**");
@@ -319,11 +319,38 @@ describe("Слова заметки по языку интерфейса", () =>
       expect(written).toContain("_Underline_");
     });
 
+    // Термин «хайлайт» (решение владельца 20261012). Заметки, собранные с
+    // прежним заголовком, переезжают на новый САМИ: заголовок — машинный блок
+    // с отпечатком в памяти привязки, и совпавший отпечаток переписывается.
+    // Рез: верните старый заголовок в `DEFAULT_TEMPLATE` (`render/defaults.ts`)
+    // — краснеет «прежний заголовок остался».
+    test("заметка с прежним заголовком «Выписки» получает новый, и ровно один", async () => {
+      pretendLanguage("ru");
+      const first = await pass();
+      const old = first.replace("## Хайлайты из Beresta", "## Выписки из Beresta");
+      vault.put(NOTE, old);
+      // Память — как у заметки, собранной ПРЕЖНЕЙ версией: отпечаток головы с
+      // прежним словом. Голова — строки до первого якоря (здесь — одна строка
+      // заголовка; иначе проверка ниже сказала бы это первой).
+      const newHead = hashLines(["## Хайлайты из Beresta"]);
+      let rewound = 0;
+      for (const [path, known] of memory) {
+        if (known.head === newHead) {
+          memory.set(path, { ...known, head: hashLines(["## Выписки из Beresta"]) });
+          rewound += 1;
+        }
+      }
+      expect(rewound).toBe(1);
+      const written = await pass();
+      expect(written.match(/## Хайлайты из Beresta/g)?.length).toBe(1);
+      expect(written, "прежний заголовок остался").not.toContain("Выписки из Beresta");
+    });
+
     test("русский интерфейс — заметка остаётся русской", async () => {
       pretendLanguage("ru");
       const written = await pass();
 
-      expect(written).toContain("## Выписки из Beresta");
+      expect(written).toContain("## Хайлайты из Beresta");
       expect(written).toContain("_Подчёркивание_");
       expect(written).not.toContain("Highlights from Beresta");
       expect(written).not.toContain("_Underline_");

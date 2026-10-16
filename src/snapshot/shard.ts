@@ -150,7 +150,7 @@ export function parseShard(text: string, where: string): ParsedShard {
   const bookUUID = bookNode === undefined ? undefined : uuidOf(bookNode["id"]);
 
   const annotations = items.map((item, at) =>
-    parseItem(asObject(item, `${where}: выписка ${at}`), bookUUID, `${where}: выписка ${at}`),
+    parseItem(asObject(item, `${where}: хайлайт ${at}`), bookUUID, `${where}: хайлайт ${at}`),
   );
 
   const removed = asArray(document["beresta:removed"] ?? [], `${where}: beresta:removed`);

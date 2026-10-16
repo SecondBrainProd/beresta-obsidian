@@ -1,6 +1,6 @@
 # Beresta for Obsidian
 
-Brings highlights and notes from the [Beresta](https://beresta.page) reader into your book notes: one managed section per book, written as Markdown callouts, next to the notes you wrote yourself.
+Brings highlights and notes from the [Beresta](../../README.md) reader into your book notes: one managed section per book, written as Markdown callouts, next to the notes you wrote yourself.
 
 The point is the *next to*. Your reading lives in two halves — quotes in a reading app, thoughts about them in Obsidian — and the halves drift apart. This plugin puts the quotes where the thoughts already are, and it never edits a line you wrote by hand.
 
@@ -33,7 +33,7 @@ Beresta writes a machine-readable snapshot of your highlights into one hidden fo
 
 The plugin reads that folder through Obsidian's own vault adapter and lays the highlights out into your book notes. Nothing else writes to your notes; Beresta itself does not know your notes exist.
 
-**That snapshot is a documented open format, not our private wire protocol.** Every file in `.beresta/`, every field, the rule for raising the format version, how long tombstones live and how to read a snapshot safely are written down in [`docs/vault-export.md`](docs/vault-export.md) — in Russian and English, under CC0 1.0, so that anyone may implement it. The document's rule is that no claim in it needs our code to check: each section ends with the command that checks it. There is also a 72-line reader in [`docs/tools/extract-highlights.py`](docs/tools/extract-highlights.py) that prints every quote using nothing but Python's standard library — no SQLite, no Swift, no Obsidian, no network. So this plugin is one reader of your highlights, not the only one; if it went away tomorrow, your quotes would still be plain files you can read.
+**That snapshot is a documented open format, not our private wire protocol.** Every file in `.beresta/`, every field, the rule for raising the format version, how long tombstones live and how to read a snapshot safely are written down in [`docs/vault-export.md`](../../docs/vault-export.md) — in Russian and English, under CC0 1.0, so that anyone may implement it. The document's rule is that no claim in it needs our code to check: each section ends with the command that checks it. There is also a 72-line reader in [`docs/tools/extract-highlights.py`](../../docs/tools/extract-highlights.py) that prints every quote using nothing but Python's standard library — no SQLite, no Swift, no Obsidian, no network. So this plugin is one reader of your highlights, not the only one; if it went away tomorrow, your quotes would still be plain files you can read.
 
 Two consequences worth knowing up front:
 
@@ -61,7 +61,7 @@ Everything the plugin writes lives between two marker lines, and nothing outside
 %% beresta:end %%
 ```
 
-The heading is `## Выписки из Beresta` when your Obsidian is in Russian. The colour word after `beresta` is the highlight colour from the app; the plugin's stylesheet paints a thin spine on the left with it, and without the plugin it is just a word.
+The heading is `## Хайлайты из Beresta` when your Obsidian is in Russian (notes made by earlier versions with `## Выписки из Beresta` switch to it on the next pass). The colour word after `beresta` is the highlight colour from the app; the plugin's stylesheet paints a thin spine on the left with it, and without the plugin it is just a word.
 
 Read that as four separate rules.
 
@@ -87,7 +87,7 @@ The layout is a template you can edit. It is a small language in the spirit of Z
 
 | Command | What it does |
 | --- | --- |
-| Lay out highlights now (Разложить выписки сейчас) | Looks at the snapshot right now, ignoring what it remembers |
+| Lay out highlights now (Разложить хайлайты сейчас) | Looks at the snapshot right now, ignoring what it remembers |
 | Bind books to notes (Привязать книги к заметкам) | The binding window |
 | Show discrepancies (Показать расхождения) | The conflicts panel, in the right sidebar |
 | Return the Beresta section to this note (Вернуть секцию Beresta в эту заметку) | Re-creates a managed section you deleted |

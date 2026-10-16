@@ -671,11 +671,11 @@ describe("заметка для книги без кандидата", () => {
 // MARK: - Экран привязки
 
 describe("экран привязки", () => {
-  test("показывает название, число выписок, машинных помечает, «создать новую» предлагает", () => {
+  test("показывает название, число хайлайтов, машинных помечает, «создать новую» предлагает", () => {
     const plan = planBinding(SNAPSHOT, VAULT);
     const screen = describePlan(plan, RU).join("\n");
     expect(screen).toContain("Building a Second Brain: A Proven Method");
-    expect(screen).toContain("47 выписок");
+    expect(screen).toContain("47 хайлайтов");
     expect(screen).toContain("похоже на машинный экспорт");
     expect(screen).toContain("создать новую");
     // Экран не смеет утверждать, что что-то уже привязано.
@@ -699,13 +699,13 @@ describe("экран привязки", () => {
     expect(lines.find((line) => line.includes(BASB_FULL))).not.toContain("совпал только автор");
   });
 
-  test("число выписок склоняется, а не приписывается", () => {
+  test("число хайлайтов склоняется, а не приписывается", () => {
     const plan = planBinding(SNAPSHOT, VAULT);
     const screen = describePlan(plan, RU).join("\n");
-    expect(screen).toContain("81 выписка");
-    expect(screen).toContain("47 выписок");
-    expect(screen).toContain("2 выписки");
-    expect(screen).toContain("1 выписка");
+    expect(screen).toContain("81 хайлайт");
+    expect(screen).toContain("47 хайлайтов");
+    expect(screen).toContain("2 хайлайта");
+    expect(screen).toContain("1 хайлайт");
   });
 });
 
@@ -1071,11 +1071,11 @@ describe("экран привязки: сигнал отдельно от шум
   });
 
   // Вырежьте склонение из `bookSubtitle` — тест обязан упасть.
-  test("число выписок склоняется в самом окне, а не только в описании", () => {
-    expect(bookSubtitle(rowOf(JEDI.uuid), RU)).toBe("Максим Дорофеев · 81 выписка");
-    expect(bookSubtitle(rowOf(BASB.uuid), RU)).toBe("Tiago Forte · 47 выписок");
-    expect(bookSubtitle(rowOf(BOOKS[6]!.uuid), RU)).toBe("Marshall Goldsmith, Mark Reiter · 4 выписки");
-    expect(bookSubtitle(rowOf(BOOKS[8]!.uuid), RU)).toBe("Брайан Моран, Майкл Леннингтон · 1 выписка");
+  test("число хайлайтов склоняется в самом окне, а не только в описании", () => {
+    expect(bookSubtitle(rowOf(JEDI.uuid), RU)).toBe("Максим Дорофеев · 81 хайлайт");
+    expect(bookSubtitle(rowOf(BASB.uuid), RU)).toBe("Tiago Forte · 47 хайлайтов");
+    expect(bookSubtitle(rowOf(BOOKS[6]!.uuid), RU)).toBe("Marshall Goldsmith, Mark Reiter · 4 хайлайта");
+    expect(bookSubtitle(rowOf(BOOKS[8]!.uuid), RU)).toBe("Брайан Моран, Майкл Леннингтон · 1 хайлайт");
   });
 
   // Вырежьте `screenIntro` из окна — экран снова не скажет, зачем он.
@@ -1103,24 +1103,24 @@ describe("экран привязки: сигнал отдельно от шум
  * Прогон глазами 20260818: выбрал книгу, нажал «Привязать выбранные» — окно
  * закрылось, и на экране не изменилось ничего. На диске в это время в заметку
  * легли 40 цитат, и заметка выросла с 1 310 до 16 559 знаков. Отсюда все
- * проверки ниже: у ответа обязаны быть ЧИСЛА (сколько книг, сколько выписок),
+ * проверки ниже: у ответа обязаны быть ЧИСЛА (сколько книг, сколько хайлайтов),
  * АДРЕС (в какую заметку) и правда про то, что не легло.
  */
 describe("ответ на «Привязать выбранные»", () => {
   // Вырежьте вызов `bindingNoticeWords` из `applyBinding` — и человек снова
   // нажмёт кнопку, увидит пустой экран и решит, что она не работает.
-  test("одна книга: сказано и сколько выписок, и в какую заметку", () => {
+  test("одна книга: сказано и сколько хайлайтов, и в какую заметку", () => {
     const words = bindingNoticeWords({
       chosen: 1,
       written: [{ path: "Библиотека/Attention Capital. How Focus Compounds.md", quotes: 40 }],
       deferred: [],
       failed: [],
     }, RU);
-    expect(words.head).toBe("Beresta: привязана 1 книга, 40 выписок легли в заметку:");
+    expect(words.head).toBe("Beresta: привязана 1 книга, 40 хайлайтов легли в заметку:");
     expect(words.notes).toEqual([
       {
         path: "Библиотека/Attention Capital. How Focus Compounds.md",
-        tail: "— 40 выписок",
+        tail: "— 40 хайлайтов",
       },
     ]);
     expect(words.rest).toEqual([]);
@@ -1137,11 +1137,11 @@ describe("ответ на «Привязать выбранные»", () => {
       deferred: [],
       failed: [],
     }, RU);
-    expect(words.head).toBe("Beresta: привязано 3 книги, 129 выписок легли в 3 заметки:");
+    expect(words.head).toBe("Beresta: привязано 3 книги, 129 хайлайтов легли в 3 заметки:");
     expect(words.notes.map((one) => one.tail)).toEqual([
-      "— 81 выписка",
-      "— 47 выписок",
-      "— 1 выписка",
+      "— 81 хайлайт",
+      "— 47 хайлайтов",
+      "— 1 хайлайт",
     ]);
   });
 
@@ -1149,8 +1149,8 @@ describe("ответ на «Привязать выбранные»", () => {
    * Отложенная заметка — не «подождите», а «выберите заново».
    *
    * Заметка, открытая с несохранёнными правками, не получает НИЧЕГО: ни
-   * выписок, ни ключа `beresta-book-id`. Значит выбор человека пропал целиком,
-   * и сказать ему «выписки приедут» было бы обещанием, которого никто не
+   * хайлайтов, ни ключа `beresta-book-id`. Значит выбор человека пропал целиком,
+   * и сказать ему «хайлайты приедут» было бы обещанием, которого никто не
    * выполнит.
    */
   test("ничего не легло из-за несохранённой заметки — сказано, что выбор пропал", () => {
@@ -1160,7 +1160,7 @@ describe("ответ на «Привязать выбранные»", () => {
       deferred: ["Библиотека/Ремесло внимания.md"],
       failed: [],
     }, RU);
-    expect(words.head).toContain("выписки не легли");
+    expect(words.head).toContain("хайлайты не легли");
     expect(words.head).toContain("несохранёнными правками");
     expect(words.head).toContain("выберите заново");
     expect(words.notes).toEqual([]);
@@ -1173,7 +1173,7 @@ describe("ответ на «Привязать выбранные»", () => {
       deferred: ["Библиотека/Тихая инженерия.md"],
       failed: ["Библиотека/Порт и причал.md"],
     }, RU);
-    expect(words.head).toBe("Beresta: привязано 3 книги, 81 выписка легла в заметку:");
+    expect(words.head).toBe("Beresta: привязано 3 книги, 81 хайлайт лёг в заметку:");
     expect(words.rest[0]).toContain("Ещё 1 заметка открыта с несохранёнными правками");
     expect(words.rest[1]).toContain("Ещё от 1 заметки проход отказался");
   });
@@ -1192,7 +1192,7 @@ describe("ответ на «Привязать выбранные»", () => {
   test("выбор принят, но менять было нечего — сказано и это", () => {
     const words = bindingNoticeWords({ chosen: 1, written: [], deferred: [], failed: [] }, RU);
     expect(words.head).toBe(
-      "Beresta: выбор принят, но ни одна заметка не изменилась: эти выписки в них уже стоят.",
+      "Beresta: выбор принят, но ни одна заметка не изменилась: эти хайлайты в них уже стоят.",
     );
   });
 });

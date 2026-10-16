@@ -138,7 +138,7 @@ export function defaultTemplate(language: string = interfaceLanguage()): string 
 }
 
 export const DEFAULT_TEMPLATE = [
-  "## Выписки из Beresta",
+  "## Хайлайты из Beresta",
   // Мысль о книге — простым абзацем, без своей подпорки: это слова человека, и
   // украшать их незачем. Пусто — строки нет вовсе.
   "{{#thought}}",

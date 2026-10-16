@@ -68,7 +68,7 @@ export interface NoteWords {
 }
 
 const RUSSIAN: NoteWords = {
-  heading: "## Выписки из Beresta",
+  heading: "## Хайлайты из Beresta",
   thought: "**Мысль.**",
   open: "Открыть в Beresta",
   page: "стр.",

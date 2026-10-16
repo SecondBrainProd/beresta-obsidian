@@ -62,7 +62,7 @@ function book(over: Partial<SnapshotBook> = {}): SnapshotBook {
 }
 
 describe("шаблон заметки и формат", () => {
-  test("готовый формат «Книга» рисует свойства, мысль и место выписок", () => {
+  test("готовый формат «Книга» рисует свойства, мысль и место хайлайтов", () => {
     const ready = defaultFormats("ru")[0];
     const text = renderNote(ready.text, book(), ready.name, RU.pass);
     expect(text.startsWith("---\n")).toBe(true);
@@ -165,7 +165,7 @@ describe("шаблон заметки и формат", () => {
     }
     // Н8: перенос строки в аргументе `replace` — экранированный, не живой.
     expect(ready.text).not.toMatch(/replace\("\n/);
-    // Н6: секция приносит свой заголовок — второго над местом выписок нет.
+    // Н6: секция приносит свой заголовок — второго над местом хайлайтов нет.
     expect(ready.text).not.toContain("### Хайлайты");
   });
 
@@ -186,7 +186,7 @@ describe("шаблон заметки и формат", () => {
       expect(hasAnchor(section.text)).toBe(true);
       expect(section.text).toContain("{{#annotations}}");
     }
-    expect(defaultSectionFile("ru").text).toContain("## Выписки из Beresta");
+    expect(defaultSectionFile("ru").text).toContain("## Хайлайты из Beresta");
     expect(defaultSectionFile("en").text).not.toContain("Выписки");
   });
 
@@ -306,7 +306,7 @@ function input(over: Partial<SyncInput>): Omit<SyncInput, "snapshot"> & Partial<
 describe("проход с форматами", () => {
   test("выписки на своём месте в шаблоне заметки, рукописное вокруг цело", async () => {
     const NEW = "Библиотека/Новая.md";
-    const initial = withFormatProperty(`# Мои мысли\n\n${EMPTY_SECTION}\n\n## После выписок\n`, "Книга");
+    const initial = withFormatProperty(`# Мои мысли\n\n${EMPTY_SECTION}\n\n## После хайлайтов\n`, "Книга");
     await runSync({
       snapshot: await readSnapshot(vault),
       ...input({
@@ -320,7 +320,7 @@ describe("проход с форматами", () => {
     expect(after).toContain("beresta-book-id");
     const begin = after.indexOf("%% beresta:begin %%");
     expect(after.indexOf("# Мои мысли")).toBeLessThan(begin);
-    expect(after.indexOf("## После выписок")).toBeGreaterThan(after.indexOf("%% beresta:end %%"));
+    expect(after.indexOf("## После хайлайтов")).toBeGreaterThan(after.indexOf("%% beresta:end %%"));
     expect(after.slice(begin)).toMatch(/\^hl-/);
   });
 

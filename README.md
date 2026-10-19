@@ -9,7 +9,7 @@ The point is the *next to*. Your reading lives in two halves — quotes in a rea
 ## Requirements
 
 - The **Beresta** app — for macOS, or for iPhone and iPad. The plugin reads what Beresta writes; without it there is nothing to read. On the Mac you pick the vault folder in the app; on iPhone and iPad you pick it in the Files app. Both write the same snapshot to the same hidden folder.
-- **Obsidian 1.4.0 or newer.** That is the version that introduced `vault.process`, which is how the plugin writes into a note without stepping on an editor that has the file open. Measured against Obsidian 1.13.7 on macOS; see "Not tested" below.
+- **Obsidian 1.13.0 or newer** since plugin 0.3.4. The settings page is described through the settings API that 1.13.0 introduced, so Obsidian's own settings search finds every field of it. On an older Obsidian the community directory keeps offering 0.3.3, which needs 1.8.7 (`versions.json` maps every plugin version to the Obsidian it needs). Measured against Obsidian 1.13.7 on macOS; see "Not tested" below.
 
 ## Language
 

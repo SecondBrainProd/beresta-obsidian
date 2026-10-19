@@ -542,15 +542,35 @@ describe("разметка книги доезжает до заметки че�
       if (!rule.trimStart().startsWith(".callout[data-callout")) continue;
       expect([rule, rule.includes('[data-callout-metadata~="beresta"]')]).toEqual([rule, true]);
     }
-    // Своих значений цвета в стиле нет ни одного: красят краски темы.
-    expect(styles).not.toMatch(/--beresta-mark-color:\s*#/);
+    // Своих значений цвета в стиле нет ни одного: коллаут красят краски темы,
+    // тройками `--color-*-rgb` — той формой, какой ждёт `--callout-color`.
+    expect(styles).not.toMatch(/--callout-color:\s*[#\d]/);
+    const paints: Record<string, string> = {
+      blue: "blue",
+      yellow: "yellow",
+      green: "green",
+      red: "red",
+      purple: "purple",
+      orange: "orange",
+      magenta: "pink",
+    };
+    for (const [name, paint] of Object.entries(paints)) {
+      const from = styles.indexOf(`[data-callout-metadata~="${name}"]`);
+      const body = styles.slice(from, styles.indexOf("}", from));
+      expect([name, body.includes(`--callout-color: var(--color-${paint}-rgb);`)]).toEqual([name, true]);
+    }
+    // Коды Zotero красятся как имена (владелец 20261019: 74 хайлайта из 789).
+    expect(styles).toContain('[data-callout-metadata~="#ffd400"]');
     // Пометка без цитаты не заводит СВОЕГО цвета поверх цвета разметки:
     // `[!note]` у Obsidian синий, и на жёлтой пометке спорили бы два цвета.
-    // Серое здесь берётся у самого Obsidian — своего значения нет и тут.
-    expect(styles).toContain(
+    // Серое здесь берётся у самого Obsidian — своего значения нет и тут. И
+    // стоит правило ВЫШЕ палитры: при равной точности палитра берёт верх, и
+    // цветная пометка остаётся цветной.
+    const note =
       '.callout[data-callout="note"][data-callout-metadata~="beresta"] {\n' +
-        "  --callout-color: var(--callout-quote, var(--callout-default));",
-    );
+      "  --callout-color: var(--callout-quote, var(--callout-default));";
+    expect(styles).toContain(note);
+    expect(styles.indexOf(note)).toBeLessThan(styles.indexOf('[data-callout-metadata~="blue"]'));
   });
 });
 

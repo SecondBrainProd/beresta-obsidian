@@ -58,6 +58,24 @@ export class FormatTemplates {
     private readonly words: () => PanelWords,
   ) {}
 
+  /** Заметки, которые заводятся прямо сейчас: путь → имя формата. */
+  private creating = new Map<string, string>();
+
+  /**
+   * На время создания заметок — их формат по пути (владелец 20261019: заметка
+   * «@Книга» получила секцию СТАНДАРТНЫМ шаблоном). Секцию новой заметки
+   * рисует тот же проход, что её заводит, а `formatOf` читает свойство из кэша
+   * Obsidian — у файла, которого ещё нет, там пусто. Формат при этом известен:
+   * его только что вписали в первый текст заметки. Вернувшаяся функция
+   * забывает эти пути — звать её, когда проход кончился.
+   */
+  expectCreating(formats: ReadonlyMap<string, string>): () => void {
+    for (const [path, name] of formats) this.creating.set(path, name);
+    return () => {
+      for (const path of formats.keys()) this.creating.delete(path);
+    };
+  }
+
   /** Пути всех файлов шаблонов — чтобы знать, чья правка требует перечитать. */
   paths(): Set<string> {
     const paths = new Set<string>();
@@ -99,7 +117,7 @@ export class FormatTemplates {
    * отрисовалась» и говорит путь, а не рисует молча стандартным.
    */
   templateFor(notePath: string): string | undefined {
-    const name = this.ports.formatOf(notePath);
+    const name = this.creating.get(notePath) ?? this.ports.formatOf(notePath);
     const format = formatNamed(this.settings(), name);
     if (name !== undefined && format === undefined) {
       const paths = this.gone.get(name) ?? new Set<string>();

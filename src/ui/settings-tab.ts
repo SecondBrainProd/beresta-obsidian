@@ -35,13 +35,27 @@
  * дописывает недоприменённое: закрытая страница не имеет права проглотить
  * набранное.
  *
+ * **С 0.3.4 страница описана, а не нарисована** (API настроек Obsidian 1.13,
+ * `minAppVersion` 1.13.0, решение владельца 20261018): `getSettingDefinitions()`
+ * вместо `display()`, чтобы настройки находил поиск Obsidian. Каждая строка
+ * по-прежнему рисуется своим кодом — правила выше не изменились.
+ *
  * **Решения здесь нет ни одного.** Что считать годным и какими словами
  * отказать — `readNumberField`/`readFolderField` в `settings.ts`, и это
  * проверяется обычным тестом. Здесь только показ, сбор нажатий и обращение к
  * Obsidian.
  */
 
-import { Notice, PluginSettingTab, Setting, TFolder, type App } from "obsidian";
+import {
+  Notice,
+  PluginSettingTab,
+  TFolder,
+  type App,
+  type Setting,
+  type SettingDefinition,
+  type SettingDefinitionGroup,
+  type SettingDefinitionItem,
+} from "obsidian";
 
 import {
   INTERVAL_FIELD,
@@ -57,6 +71,7 @@ import {
 import type { NoteFormat } from "../settings";
 import { defaultFormats, defaultSectionFile } from "../render/default-formats";
 import { interfaceLanguage } from "../render/defaults";
+import { TemplateFileSuggest } from "./file-suggest";
 import { fill, panelWords, type SettingsWords } from "./words";
 
 /** Что странице нужно от плагина — и ничего больше. */
@@ -90,6 +105,18 @@ export class BerestaSettingTab extends PluginSettingTab {
    */
   private readonly pending: (() => Promise<void>)[] = [];
 
+  /**
+   * Страницу перестраиваем МЫ — после правки списка форматов или сброса
+   * шаблона.
+   *
+   * Тогда снятые строки НЕ доприменяются: у поля формата номер взят при
+   * отрисовке, и после удаления первого формата недоприменённое поле прежнего
+   * второго легло бы в новый второй, то есть в чужой формат. Прежний `display()`
+   * поступал так же — очищал список ожидающих, не исполняя. Строки, которые
+   * снимает сам Obsidian (закрыли окно, ушли на другую вкладку), доприменяются.
+   */
+  private rebuilding = false;
+
   constructor(
     app: App,
     // `PluginSettingTab` требует сам плагин; нам от него нужны две вещи, и
@@ -106,123 +133,204 @@ export class BerestaSettingTab extends PluginSettingTab {
     return panelWords(interfaceLanguage()).settings;
   }
 
-  override display(): void {
-    const { containerEl } = this;
-    containerEl.empty();
-    this.pending.length = 0;
+  /**
+   * Страница — описанием, а не отрисовкой (API настроек Obsidian 1.13, решение
+   * владельца 20261018, вопрос 24 в `docs/вопросы-владельцу.md`).
+   *
+   * **Зачем.** Каталог плагинов считает `display()` устаревшим: описанные так
+   * настройки не находит поиск по настройкам Obsidian. Здесь у каждой строки
+   * имя и пояснение лежат в описании — их и ищет поиск, — а сама строка
+   * рисуется прежним кодом (`render`). Поведение полей не меняется ни в чём:
+   * применение уходом из поля, отказ словами под полем, поле не расходится с
+   * `data.json`. Готовые элементы управления Obsidian (`control`) здесь нарочно
+   * не взяты: они пишут настройку сами, на каждой правке, а сдвиг пояса
+   * перерисовывает блоки ВСЕХ заметок.
+   *
+   * **Ключи строк.** Строку Obsidian узнаёт по имени внутри её группы, группу —
+   * по заголовку; одинаковые ключи он перерисовывает непредсказуемо и пишет об
+   * этом в консоль. Поэтому каждый формат — своя группа с заголовком «Формат N»:
+   * четыре поля у двух форматов в одной группе дали бы четыре пары одинаковых
+   * имён.
+   *
+   * **Описание зовётся при регистрации вкладки и при `update()`**, а не при
+   * каждом открытии страницы. Число форматов — единственное, что меняет его
+   * форму, и меняется оно только здесь же: после правки зовётся `rebuild()`.
+   * Значения полей читаются при отрисовке строки, то есть всегда свежие.
+   */
+  override getSettingDefinitions(): SettingDefinitionItem[] {
+    const words = this.words.formats;
+    const formats = this.host.settingsNow().formats;
+    return [
+      {
+        type: "group",
+        items: [
+          this.numberField(
+            OFFSET_FIELD,
+            () => this.host.settingsNow().timeZoneOffsetMinutes,
+            (value) => ({ ...this.host.settingsNow(), timeZoneOffsetMinutes: value }),
+          ),
+          this.folderField(),
+          this.numberField(
+            INTERVAL_FIELD,
+            () => Math.round(this.host.settingsNow().focusedIntervalMs / 1000),
+            (value) => ({ ...this.host.settingsNow(), focusedIntervalMs: value * 1000 }),
+          ),
+          this.numberField(
+            KEEP_BACKUPS_FIELD,
+            () => this.host.settingsNow().keepBackups,
+            (value) => ({ ...this.host.settingsNow(), keepBackups: value }),
+          ),
+          this.numberField(
+            REMOVAL_COUNT_FIELD,
+            () => this.host.settingsNow().removalCount,
+            (value) => ({ ...this.host.settingsNow(), removalCount: value }),
+          ),
+          this.templateField(),
+        ],
+      },
+      {
+        type: "group",
+        heading: words.heading,
+        items: [this.addFormatRow(), ...this.defaultsRow()],
+      },
+      ...formats.map((_, index) => this.formatGroup(index)),
+    ];
+  }
 
-    this.numberField(
-      OFFSET_FIELD,
-      () => this.host.settingsNow().timeZoneOffsetMinutes,
-      (value) => ({ ...this.host.settingsNow(), timeZoneOffsetMinutes: value }),
-    );
+  /** Перестроить страницу после правки, меняющей её форму. */
+  private rebuild(): void {
+    this.rebuilding = true;
+    try {
+      this.update();
+    } finally {
+      this.rebuilding = false;
+    }
+  }
 
-    this.folderField();
-
-    this.numberField(
-      INTERVAL_FIELD,
-      () => Math.round(this.host.settingsNow().focusedIntervalMs / 1000),
-      (value) => ({ ...this.host.settingsNow(), focusedIntervalMs: value * 1000 }),
-    );
-
-    this.numberField(
-      KEEP_BACKUPS_FIELD,
-      () => this.host.settingsNow().keepBackups,
-      (value) => ({ ...this.host.settingsNow(), keepBackups: value }),
-    );
-
-    this.numberField(
-      REMOVAL_COUNT_FIELD,
-      () => this.host.settingsNow().removalCount,
-      (value) => ({ ...this.host.settingsNow(), removalCount: value }),
-    );
-
-    this.templateField();
-    this.formatsSection();
+  /**
+   * Поле, ждущее применения: в список ожидающих, а при снятии строки —
+   * доприменить, если снимаем не мы (см. `rebuilding`).
+   */
+  private awaitCommit(commit: () => Promise<void>): () => void {
+    this.pending.push(commit);
+    return () => {
+      const at = this.pending.indexOf(commit);
+      if (at < 0) return;
+      this.pending.splice(at, 1);
+      if (!this.rebuilding) void commit();
+    };
   }
 
   /**
    * Форматы заметок — как «форматы ввоза» у Zotero Integration (план
    * `20261008-шаблоны-плагина-план.md`, задачи 3 и 6).
    */
-  private formatsSection(): void {
+  private addFormatRow(): SettingDefinition {
     const words = this.words.formats;
-    new Setting(this.containerEl).setName(words.heading).setDesc(words.description).setHeading();
+    return {
+      name: words.add,
+      desc: words.description,
+      render: (setting) => {
+        setting.addButton((button) => {
+          button.setButtonText(words.add).onClick(() => {
+            const formats = this.host.settingsNow().formats;
+            const named = (number: number): string => fill(words.formatHeading, { index: String(number) });
+            let number = formats.length + 1;
+            while (formats.some((one) => one.name === named(number))) number += 1;
+            void this.saveFormats([...formats, { name: named(number) }]);
+          });
+        });
+      },
+    };
+  }
 
-    this.host.settingsNow().formats.forEach((_, index) => {
-      new Setting(this.containerEl)
-        .setName(fill(words.formatHeading, { index: String(index + 1) }))
-        .addExtraButton((button) => {
+  private defaultsRow(): SettingDefinition[] {
+    if (this.host.createFile === undefined) return [];
+    const words = this.words.formats;
+    return [
+      {
+        name: words.addDefaults,
+        desc: words.addDefaultsDescription,
+        render: (setting) => {
+          const say = this.sayLine(setting);
+          setting.addButton((button) => {
+            button.setButtonText(words.addDefaults).onClick(() => {
+              void (async () => {
+                const created: string[] = [];
+                const kept: string[] = [];
+                let formats = [...this.host.settingsNow().formats];
+                // Секция — тем же файлом и тем же правилом: есть — не трогаем. Оба
+                // готовых формата получают её шаблоном секции, если своего нет: так
+                // у человека живой образец цикла с {{anchor}} вместо подсказки (Н2).
+                const section = defaultSectionFile(interfaceLanguage());
+                const sectionMade = await this.host.createFile!(section.file, section.text);
+                (sectionMade ? created : kept).push(section.file);
+                for (const ready of defaultFormats(interfaceLanguage())) {
+                  const made = await this.host.createFile!(ready.file, ready.text);
+                  (made ? created : kept).push(ready.file);
+                  if (!formats.some((one) => one.name === ready.name)) {
+                    formats.push({
+                      name: ready.name,
+                      noteTemplate: ready.file,
+                      blockTemplate: section.file,
+                      pathPattern: `${ready.folder}/{{title}}.md`,
+                    });
+                  } else {
+                    formats = formats.map((one) =>
+                      one.name === ready.name && one.blockTemplate === undefined
+                        ? { ...one, blockTemplate: section.file }
+                        : one,
+                    );
+                  }
+                }
+                await this.host.save({ ...this.host.settingsNow(), formats });
+                this.rebuild();
+                const lines = [
+                  created.length > 0 ? fill(words.defaultsCreated, { files: created.join(", ") }) : "",
+                  kept.length > 0 ? fill(words.defaultsKept, { files: kept.join(", ") }) : "",
+                ].filter((line) => line !== "");
+                new Notice(`Beresta: ${lines.join(" ")}`, 10_000);
+                // Строка перестроена — пишем в неё, а не в снятую: перестройка
+                // синхронна, и `say` новой строки уже на месте.
+                this.said?.(lines.join(" "), false);
+              })();
+            });
+          });
+          this.said = say;
+          return () => {
+            if (this.said === say) this.said = undefined;
+          };
+        },
+      },
+    ];
+  }
+
+  /** Строка ответа у кнопки готовых форматов — та, что на экране сейчас. */
+  private said: ((said: string | undefined, refused: boolean) => void) | undefined;
+
+  /** Один формат — своя группа: заголовок с кнопкой удаления и четыре поля. */
+  private formatGroup(index: number): SettingDefinitionGroup {
+    const words = this.words.formats;
+    return {
+      type: "group",
+      heading: fill(words.formatHeading, { index: String(index + 1) }),
+      extraButtons: [
+        (button) => {
           button
             .setIcon("trash")
             .setTooltip(words.remove)
             .onClick(() => {
               void this.saveFormats(this.host.settingsNow().formats.filter((_, at) => at !== index));
             });
-        });
-      this.formatText(index, "name", words.name);
-      this.formatText(index, "noteTemplate", words.noteTemplate);
-      this.formatText(index, "blockTemplate", words.blockTemplate, words.blockTemplateDescription);
-      this.formatText(index, "pathPattern", words.pathPattern);
-    });
-
-    new Setting(this.containerEl).addButton((button) => {
-      button.setButtonText(words.add).onClick(() => {
-        const formats = this.host.settingsNow().formats;
-        const named = (number: number): string => fill(words.formatHeading, { index: String(number) });
-        let number = formats.length + 1;
-        while (formats.some((one) => one.name === named(number))) number += 1;
-        void this.saveFormats([...formats, { name: named(number) }]);
-      });
-    });
-
-    if (this.host.createFile !== undefined) {
-      const setting = new Setting(this.containerEl)
-        .setName(words.addDefaults)
-        .setDesc(words.addDefaultsDescription);
-      const say = this.sayLine(setting);
-      setting.addButton((button) => {
-        button.setButtonText(words.addDefaults).onClick(() => {
-          void (async () => {
-            const created: string[] = [];
-            const kept: string[] = [];
-            let formats = [...this.host.settingsNow().formats];
-            // Секция — тем же файлом и тем же правилом: есть — не трогаем. Оба
-            // готовых формата получают её шаблоном секции, если своего нет: так
-            // у человека живой образец цикла с {{anchor}} вместо подсказки (Н2).
-            const section = defaultSectionFile(interfaceLanguage());
-            const sectionMade = await this.host.createFile!(section.file, section.text);
-            (sectionMade ? created : kept).push(section.file);
-            for (const ready of defaultFormats(interfaceLanguage())) {
-              const made = await this.host.createFile!(ready.file, ready.text);
-              (made ? created : kept).push(ready.file);
-              if (!formats.some((one) => one.name === ready.name)) {
-                formats.push({
-                  name: ready.name,
-                  noteTemplate: ready.file,
-                  blockTemplate: section.file,
-                  pathPattern: `${ready.folder}/{{title}}.md`,
-                });
-              } else {
-                formats = formats.map((one) =>
-                  one.name === ready.name && one.blockTemplate === undefined
-                    ? { ...one, blockTemplate: section.file }
-                    : one,
-                );
-              }
-            }
-            await this.host.save({ ...this.host.settingsNow(), formats });
-            this.display();
-            const lines = [
-              created.length > 0 ? fill(words.defaultsCreated, { files: created.join(", ") }) : "",
-              kept.length > 0 ? fill(words.defaultsKept, { files: kept.join(", ") }) : "",
-            ].filter((line) => line !== "");
-            new Notice(`Beresta: ${lines.join(" ")}`, 10_000);
-            say(lines.join(" "), false);
-          })();
-        });
-      });
-    }
+        },
+      ],
+      items: [
+        this.formatText(index, "name", words.name),
+        this.formatText(index, "noteTemplate", words.noteTemplate),
+        this.formatText(index, "blockTemplate", words.blockTemplate, words.blockTemplateDescription),
+        this.formatText(index, "pathPattern", words.pathPattern),
+      ],
+    };
   }
 
   /** Одно поле формата; применяется уходом фокуса, как прочие поля страницы. */
@@ -231,37 +339,56 @@ export class BerestaSettingTab extends PluginSettingTab {
     key: "name" | "noteTemplate" | "blockTemplate" | "pathPattern",
     label: string,
     description?: string,
-  ): void {
-    const setting = new Setting(this.containerEl).setName(label);
-    if (description !== undefined) setting.setDesc(description);
-    const say = this.sayLine(setting);
-    setting.addText((text) => {
-      text.setValue(this.host.settingsNow().formats[index]?.[key] ?? "");
-      const commit = async (): Promise<void> => {
-        const formats = this.host.settingsNow().formats;
-        const current = formats[index];
-        if (current === undefined) return;
-        const value = text.getValue().trim();
-        if (key === "name") {
-          if (value === "" || formats.some((one, at) => at !== index && one.name === value)) {
-            say(this.words.formats.nameTaken, true);
-            text.setValue(current.name);
-            return;
+  ): SettingDefinition {
+    return {
+      name: label,
+      ...(description === undefined ? {} : { desc: description }),
+      render: (setting) => {
+        const say = this.sayLine(setting);
+        let release: () => void = () => {};
+        setting.addText((text) => {
+          text.setValue(this.host.settingsNow().formats[index]?.[key] ?? "");
+          const commit = async (): Promise<void> => {
+            const formats = this.host.settingsNow().formats;
+            const current = formats[index];
+            if (current === undefined) return;
+            const value = text.getValue().trim();
+            if (key === "name") {
+              if (value === "" || formats.some((one, at) => at !== index && one.name === value)) {
+                say(this.words.formats.nameTaken, true);
+                text.setValue(current.name);
+                return;
+              }
+              say(undefined, false);
+            }
+            const next = { ...current, [key]: value === "" && key !== "name" ? undefined : value };
+            if (next[key] === current[key]) return;
+            await this.saveFormats(formats.map((one, at) => (at === index ? next : one)));
+          };
+          release = this.awaitCommit(commit);
+          text.inputEl.addEventListener("blur", () => void commit());
+          // Файлы шаблонов — подсказкой по мере набора, а не полным путём по
+          // памяти (заказ владельца 20261019). Выбор сохраняется сразу: уход
+          // фокуса после щелчка по списку не гарантирован.
+          if (key === "noteTemplate" || key === "blockTemplate") {
+            const suggest = new TemplateFileSuggest(this.app, text.inputEl, () =>
+              this.app.vault.getMarkdownFiles().map((file) => file.path),
+            );
+            suggest.onSelect((path) => {
+              text.setValue(path);
+              suggest.close();
+              void commit();
+            });
           }
-          say(undefined, false);
-        }
-        const next = { ...current, [key]: value === "" && key !== "name" ? undefined : value };
-        if (next[key] === current[key]) return;
-        await this.saveFormats(formats.map((one, at) => (at === index ? next : one)));
-      };
-      this.pending.push(commit);
-      text.inputEl.addEventListener("blur", () => void commit());
-    });
+        });
+        return release;
+      },
+    };
   }
 
   private async saveFormats(formats: readonly NoteFormat[]): Promise<void> {
     await this.host.save({ ...this.host.settingsNow(), formats });
-    this.display();
+    this.rebuild();
   }
 
   /**
@@ -277,51 +404,58 @@ export class BerestaSettingTab extends PluginSettingTab {
    * и сохраним»: секция без якорей читается слиянием как «человек убрал все
    * блоки», и на новой заметке это создало бы пустую управляемую секцию молча.
    */
-  private templateField(): void {
-    const setting = new Setting(this.containerEl)
-      .setName(this.words.templateName)
-      .setDesc(this.words.templateDescription);
-    // Строка — столбиком: описание сверху во всю ширину, поле под ним тоже во
-    // всю. В обычной строке колонка управления сжимается под длинное описание,
-    // и поле шириной «100 %» от неё вырождалось в узкую полоску (кадр владельца
-    // 20261007, Obsidian 1.14).
-    setting.settingEl.addClass("beresta-setting-stacked");
-    const say = this.sayLine(setting);
+  private templateField(): SettingDefinition {
+    return {
+      name: this.words.templateName,
+      desc: this.words.templateDescription,
+      render: (setting) => {
+        // Строка — столбиком: описание сверху во всю ширину, поле под ним тоже во
+        // всю. В обычной строке колонка управления сжимается под длинное описание,
+        // и поле шириной «100 %» от неё вырождалось в узкую полоску (кадр владельца
+        // 20261007, Obsidian 1.14).
+        setting.settingEl.addClass("beresta-setting-stacked");
+        const say = this.sayLine(setting);
+        let release: () => void = () => {};
 
-    setting.addTextArea((area) => {
-      area.setValue(this.host.settingsNow().template ?? "");
-      area.inputEl.rows = 12;
-      // ⚠️ Вид — КЛАССОМ, а не присваиванием в `style` (замечание проверки
-      // каталога 20260915, правило `obsidianmd/no-static-styles-assignment`).
-      // Присвоенный стиль не переопределить темой и не отменить пользователю:
-      // он старше любого правила таблицы.
-      area.inputEl.addClass("beresta-template-area");
+        setting.addTextArea((area) => {
+          area.setValue(this.host.settingsNow().template ?? "");
+          area.inputEl.rows = 12;
+          // ⚠️ Вид — КЛАССОМ, а не присваиванием в `style` (замечание проверки
+          // каталога 20260915, правило `obsidianmd/no-static-styles-assignment`).
+          // Присвоенный стиль не переопределить темой и не отменить пользователю:
+          // он старше любого правила таблицы.
+          area.inputEl.addClass("beresta-template-area");
 
-      const commit = async (): Promise<void> => {
-        const verdict = readTemplateField(area.getValue(), this.words);
-        if (verdict.kind === "ok") {
-          say(verdict.said, false);
-          if (verdict.value !== this.host.settingsNow().template) {
-            await this.host.save({ ...this.host.settingsNow(), template: verdict.value });
-          }
-        } else if (verdict.kind === "refused") {
-          say(verdict.said, true);
-        }
-        area.setValue(this.host.settingsNow().template ?? "");
-      };
-      this.pending.push(commit);
-      area.inputEl.addEventListener("blur", () => void commit());
-    });
-
-    setting.addExtraButton((button) => {
-      button
-        .setIcon("rotate-ccw")
-        .setTooltip(this.words.resetTemplate)
-        .onClick(() => {
-          void this.host.save({ ...this.host.settingsNow(), template: undefined });
-          this.display();
+          const commit = async (): Promise<void> => {
+            const verdict = readTemplateField(area.getValue(), this.words);
+            if (verdict.kind === "ok") {
+              say(verdict.said, false);
+              if (verdict.value !== this.host.settingsNow().template) {
+                await this.host.save({ ...this.host.settingsNow(), template: verdict.value });
+              }
+            } else if (verdict.kind === "refused") {
+              say(verdict.said, true);
+            }
+            area.setValue(this.host.settingsNow().template ?? "");
+          };
+          release = this.awaitCommit(commit);
+          area.inputEl.addEventListener("blur", () => void commit());
         });
-    });
+
+        setting.addExtraButton((button) => {
+          button
+            .setIcon("rotate-ccw")
+            .setTooltip(this.words.resetTemplate)
+            .onClick(() => {
+              void (async () => {
+                await this.host.save({ ...this.host.settingsNow(), template: undefined });
+                this.rebuild();
+              })();
+            });
+        });
+        return release;
+      },
+    };
   }
 
   /** Страницу закрыли — доприменяем то, из чего человек не успел уйти. */
@@ -337,74 +471,86 @@ export class BerestaSettingTab extends PluginSettingTab {
     spec: NumberField,
     read: () => number,
     write: (value: number) => BerestaSettings,
-  ): void {
+  ): SettingDefinition {
     const field = this.words.fields[spec.key];
-    const setting = new Setting(this.containerEl).setName(field.name).setDesc(field.description);
-    const say = this.sayLine(setting);
+    return {
+      name: field.name,
+      desc: field.description,
+      render: (setting) => {
+        const say = this.sayLine(setting);
+        let release: () => void = () => {};
 
-    setting.addText((text) => {
-      text.setValue(String(read()));
+        setting.addText((text) => {
+          text.setValue(String(read()));
 
-      const commit = async (): Promise<void> => {
-        const verdict = readNumberField(spec, text.getValue(), this.words);
-        if (verdict.kind === "ok") {
-          say(undefined, false);
-          if (verdict.value !== read()) await this.host.save(write(verdict.value));
-        } else if (verdict.kind === "refused") {
-          say(verdict.said, true);
-        }
-        // Всегда: в поле стоит то, что лежит в настройке. Отказ оставляет
-        // прежнее число видимым, а не своё зачёркнутое.
-        text.setValue(String(read()));
-      };
-      this.pending.push(commit);
+          const commit = async (): Promise<void> => {
+            const verdict = readNumberField(spec, text.getValue(), this.words);
+            if (verdict.kind === "ok") {
+              say(undefined, false);
+              if (verdict.value !== read()) await this.host.save(write(verdict.value));
+            } else if (verdict.kind === "refused") {
+              say(verdict.said, true);
+            }
+            // Всегда: в поле стоит то, что лежит в настройке. Отказ оставляет
+            // прежнее число видимым, а не своё зачёркнутое.
+            text.setValue(String(read()));
+          };
+          release = this.awaitCommit(commit);
 
-      // На каждой букве — только слова, без записи: человек видит отказ сразу,
-      // а хранилище не перерисовывается на полпути к «300».
-      text.onChange((typed) => {
-        const verdict = readNumberField(spec, typed, this.words);
-        say(verdict.kind === "refused" ? verdict.said : undefined, true);
-      });
-      text.inputEl.addEventListener("blur", () => void commit());
-      text.inputEl.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") void commit();
-      });
-    });
+          // На каждой букве — только слова, без записи: человек видит отказ сразу,
+          // а хранилище не перерисовывается на полпути к «300».
+          text.onChange((typed) => {
+            const verdict = readNumberField(spec, typed, this.words);
+            say(verdict.kind === "refused" ? verdict.said : undefined, true);
+          });
+          text.inputEl.addEventListener("blur", () => void commit());
+          text.inputEl.addEventListener("keydown", (event) => {
+            if (event.key === "Enter") void commit();
+          });
+        });
+        return release;
+      },
+    };
   }
 
-  private folderField(): void {
-    const setting = new Setting(this.containerEl)
-      .setName(this.words.folderName)
-      .setDesc(this.words.folderDescription);
-    const say = this.sayLine(setting);
+  private folderField(): SettingDefinition {
+    return {
+      name: this.words.folderName,
+      desc: this.words.folderDescription,
+      render: (setting) => {
+        const say = this.sayLine(setting);
+        let release: () => void = () => {};
 
-    setting.addText((text) => {
-      text.setValue(this.host.settingsNow().libraryFolder);
+        setting.addText((text) => {
+          text.setValue(this.host.settingsNow().libraryFolder);
 
-      const commit = async (): Promise<void> => {
-        const verdict = readFolderField(text.getValue(), (path) => this.folderExists(path), this.words);
-        if (verdict.kind === "ok") {
-          say(verdict.said, false);
-          if (verdict.value !== this.host.settingsNow().libraryFolder) {
-            await this.host.save({ ...this.host.settingsNow(), libraryFolder: verdict.value });
-          }
-        } else if (verdict.kind === "refused") {
-          say(verdict.said, true);
-        }
-        text.setValue(this.host.settingsNow().libraryFolder);
-      };
-      this.pending.push(commit);
+          const commit = async (): Promise<void> => {
+            const verdict = readFolderField(text.getValue(), (path) => this.folderExists(path), this.words);
+            if (verdict.kind === "ok") {
+              say(verdict.said, false);
+              if (verdict.value !== this.host.settingsNow().libraryFolder) {
+                await this.host.save({ ...this.host.settingsNow(), libraryFolder: verdict.value });
+              }
+            } else if (verdict.kind === "refused") {
+              say(verdict.said, true);
+            }
+            text.setValue(this.host.settingsNow().libraryFolder);
+          };
+          release = this.awaitCommit(commit);
 
-      text.onChange((typed) => {
-        const verdict = readFolderField(typed, (path) => this.folderExists(path), this.words);
-        if (verdict.kind === "refused") say(verdict.said, true);
-        else say(verdict.kind === "ok" ? verdict.said : undefined, false);
-      });
-      text.inputEl.addEventListener("blur", () => void commit());
-      text.inputEl.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") void commit();
-      });
-    });
+          text.onChange((typed) => {
+            const verdict = readFolderField(typed, (path) => this.folderExists(path), this.words);
+            if (verdict.kind === "refused") say(verdict.said, true);
+            else say(verdict.kind === "ok" ? verdict.said : undefined, false);
+          });
+          text.inputEl.addEventListener("blur", () => void commit());
+          text.inputEl.addEventListener("keydown", (event) => {
+            if (event.key === "Enter") void commit();
+          });
+        });
+        return release;
+      },
+    };
   }
 
   private folderExists(path: string): boolean {
@@ -423,9 +569,9 @@ export class BerestaSettingTab extends PluginSettingTab {
    * само, без правки чужой раскладки. Своё окно `Notice` в углу здесь не
    * годится вовсе: человек, печатающий в поле, смотрит в поле.
    *
-   * `setErrorMessage` Obsidian сюда не зовётся нарочно: он появился в 1.13.0, а
-   * `minAppVersion` плагина — 1.4.0. На 1.4–1.12 это был бы не отказ, а падение
-   * страницы настроек в тот самый момент, когда человек ошибся.
+   * `setErrorMessage` Obsidian (1.13.0) сюда не зовётся и после подъёма
+   * `minAppVersion` до 1.13.0: он знает только отказ, а строке нужны оба
+   * ответа — у папки «принято, но такой папки пока нет» отказом не является.
    */
   private sayLine(setting: Setting): (said: string | undefined, refused: boolean) => void {
     const line = setting.infoEl.createDiv({ cls: "beresta-setting-said" });

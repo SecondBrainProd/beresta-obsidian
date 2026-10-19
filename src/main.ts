@@ -1,5 +1,7 @@
 import { MarkdownView, Notice, Plugin, TFile, normalizePath, type WorkspaceLeaf } from "obsidian";
 
+import { BindingIndex } from "./binding/index";
+
 import {
   applyChoices,
   bindingNoticeWords,
@@ -60,6 +62,8 @@ import { indexPath } from "./snapshot/paths";
 export default class BerestaPlugin extends Plugin {
   private runner!: SyncRunner;
   private formats!: FormatTemplates;
+  /** Привязки «заметка → книги»: одно перечисление при загрузке, дальше события. */
+  private bindingIndex!: BindingIndex<TFile>;
   private schedule = new PollSchedule();
   private statusEl: HTMLElement | undefined;
   private focused = true;
@@ -119,6 +123,33 @@ export default class BerestaPlugin extends Plugin {
     this.registerEvent(
       this.app.vault.on("modify", (file) => {
         if (this.formats.paths().has(file.path)) void this.formats.reload();
+      }),
+    );
+    // Рекомендация каталога к 0.3.3 (Vault Enumeration): хранилище
+    // перечисляется здесь и ещё раз, когда кэш дочитан (`resolved`, холодный
+    // старт), а не на каждый такт опроса; дальше указатель правят события.
+    this.bindingIndex = new BindingIndex<TFile>({
+      files: () => this.app.vault.getMarkdownFiles(),
+      idsOf: (file) => this.bookIdsOf(file),
+    });
+    this.bindingIndex.rebuild();
+    let resolvedOnce = false;
+    this.registerEvent(
+      this.app.metadataCache.on("resolved", () => {
+        if (resolvedOnce) return;
+        resolvedOnce = true;
+        this.bindingIndex.rebuild();
+      }),
+    );
+    this.registerEvent(this.app.metadataCache.on("changed", (file) => this.bindingIndex.refresh(file)));
+    this.registerEvent(
+      this.app.vault.on("delete", (file) => {
+        if (file instanceof TFile) this.bindingIndex.forget(file.path);
+      }),
+    );
+    this.registerEvent(
+      this.app.vault.on("rename", (file, oldPath) => {
+        if (file instanceof TFile) this.bindingIndex.rename(file, oldPath);
       }),
     );
 
@@ -376,6 +407,8 @@ export default class BerestaPlugin extends Plugin {
     // «Создать новую заметку» спрашивает формат списком (слово владельца R03:
     // «Вручную при создании»). Форматов нет — вопроса нет, всё как прежде.
     const texts = new Map<string, string>();
+    // Формат каждой заводимой заметки — проходу, рисующему её первую секцию.
+    const creatingFormats = new Map<string, string>();
     const formats = this.runner.state.settings.formats;
     if (formats.length > 0 && creations.length > 0) {
       const format = await new Promise<NoteFormat | undefined | "cancel">((answer) => {
@@ -433,6 +466,7 @@ export default class BerestaPlugin extends Plugin {
           }
           try {
             texts.set(creation.path, renderNote(template ?? "{{annotations}}", book, format.name, this.words.pass));
+            creatingFormats.set(creation.path, format.name);
           } catch (error) {
             new Notice(fill(this.words.formats.noteFailed, { message: (error as Error).message }), 15_000);
             return;
@@ -444,12 +478,18 @@ export default class BerestaPlugin extends Plugin {
     // Привязки ещё нет во frontmatter — её впишет этот же проход. Поэтому они
     // передаются заходу отдельно: иначе первый проход не увидел бы ни одной.
     this.runner.forgetSnapshot();
-    const run = await this.runChoice({
-      alsoBind: bindings,
-      creating: new Set(creations.map((one) => one.path)),
-      only: new Set(bindings.keys()),
-      initialText: (path) => texts.get(path),
-    });
+    const release = this.formats.expectCreating(creatingFormats);
+    let run: Awaited<ReturnType<typeof this.runChoice>>;
+    try {
+      run = await this.runChoice({
+        alsoBind: bindings,
+        creating: new Set(creations.map((one) => one.path)),
+        only: new Set(bindings.keys()),
+        initialText: (path) => texts.get(path),
+      });
+    } finally {
+      release();
+    }
     // Прохода не было или он упал — про это уже сказано вслух своими словами.
     // Второе сообщение здесь только повторило бы то же самое другими.
     if (run === undefined) return;
@@ -625,6 +665,8 @@ export default class BerestaPlugin extends Plugin {
   private async createNotes(books: readonly SnapshotBook[], format: NoteFormat | undefined): Promise<void> {
     const folder = this.runner.state.settings.libraryFolder;
     const texts = new Map<string, string>();
+    // Формат каждой заводимой заметки — проходу, рисующему её первую секцию.
+    const creatingFormats = new Map<string, string>();
     const bindings = new Map<string, readonly string[]>();
     let template: string | undefined;
     try {
@@ -651,6 +693,7 @@ export default class BerestaPlugin extends Plugin {
           // Без файла шаблона заметки — пустая заметка, но со свойством формата:
           // блоки всё равно рисуются шаблоном блока формата.
           texts.set(path, renderNote(template ?? "{{annotations}}", book, format.name, this.words.pass));
+          creatingFormats.set(path, format.name);
         } catch (error) {
           new Notice(fill(this.words.formats.noteFailed, { message: (error as Error).message }), 15_000);
           continue;
@@ -662,12 +705,17 @@ export default class BerestaPlugin extends Plugin {
     // Байты снимка не менялись с прохода в `unboundBooks` — без забывания
     // раннер счёл бы, что смотреть не на что, и заметку не завёл бы.
     this.runner.forgetSnapshot();
-    await this.runChoice({
-      alsoBind: bindings,
-      creating: new Set(bindings.keys()),
-      only: new Set(bindings.keys()),
-      initialText: (path) => texts.get(path),
-    });
+    const release = this.formats.expectCreating(creatingFormats);
+    try {
+      await this.runChoice({
+        alsoBind: bindings,
+        creating: new Set(bindings.keys()),
+        only: new Set(bindings.keys()),
+        initialText: (path) => texts.get(path),
+      });
+    } finally {
+      release();
+    }
     if (bindings.size === 1) {
       const [path] = bindings.keys();
       if (this.app.vault.getAbstractFileByPath(path) instanceof TFile) {
@@ -809,17 +857,14 @@ export default class BerestaPlugin extends Plugin {
   /**
    * Кто с какой книгой связан — по frontmatter, а не по имени файла.
    *
-   * Читается из `metadataCache`, а не чтением ста двадцати файлов: опрос ходит
-   * сюда раз в пять секунд, и разбор всего хранилища на каждый такт был бы
-   * платой за то, что Obsidian уже посчитал.
+   * Берётся из указателя (`BindingIndex`), а не перечислением хранилища: опрос
+   * ходит сюда раз в пять секунд, и даже обход одного `metadataCache` по всем
+   * заметкам каждые пять секунд каталог Obsidian счёл перечислением
+   * хранилища (проверка 0.3.3, 20261017). Указатель строится при загрузке и
+   * живёт событиями кэша и хранилища.
    */
   private async bindings(): Promise<Map<string, readonly string[]>> {
-    const found = new Map<string, readonly string[]>();
-    for (const file of this.app.vault.getMarkdownFiles()) {
-      const ids = this.bookIdsOf(file);
-      if (ids.length > 0) found.set(file.path, ids);
-    }
-    return found;
+    return this.bindingIndex.snapshot();
   }
 
   private bookIdsOf(file: TFile): string[] {

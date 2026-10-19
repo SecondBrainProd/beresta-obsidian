@@ -203,77 +203,77 @@ input.beresta-setting-invalid {
   border-color: var(--text-error);
 }
 
-/* Цвет разметки — цветом, а не словом (находка 10 прогона глазами 20260818).
+/* Цвет хайлайта — цветом всего коллаута (слово владельца 20261019: «давай
+ * встраивать, меньше зависимостей и точек отказа»; до того красили сниппетом
+ * хранилища, как у Zotero Integration).
  *
  * Отрисовка ставит метку коллаута: `> [!quote|beresta yellow]+ …`. Obsidian
- * кладёт её в `data-callout-metadata`, и здесь она становится узким корешком
- * слева от блока. Доводы, почему цвет едет так, а не словом в тексте заметки,
- * — в `src/render/defaults.ts`, у самого шаблона.
+ * кладёт её в `data-callout-metadata`, и правило ниже задаёт коллауту его
+ * `--callout-color`: цветными становятся заголовок, значок, подложка и рамка —
+ * так, как тема рисует любой цветной коллаут.
  *
  * **Слово `beresta` в каждом правиле — граница чужого.** Метку коллаута люди
  * пишут и сами (`[!note|left]` для картинки, `[!tip|yellow]` для своего), и
  * правило по одному имени цвета красило бы их блоки тоже. Плагин красит ровно
  * то, что нарисовал сам.
  *
- * **Краски — темы, а не наши.** `--color-yellow` и соседние объявлены самим
- * Obsidian и переопределяются темой человека: корешок остаётся различимым и на
- * светлой, и на тёмной, и не спорит с той единственной темой, под которую его
- * подбирали бы вручную. Значений `#rrggbb` здесь нет ни одного — по той же
- * причине, по которой их нет во всём этом файле.
+ * **Краски — темы, а не наши.** `--color-yellow-rgb` и соседние объявлены
+ * самим Obsidian тройкой `r, g, b` — той же формой, в какой коллаут ждёт
+ * `--callout-color` (сниппет владельца тройками работает на 1.14), — и
+ * переопределяются темой: коллаут различим и на светлой, и на тёмной.
+ * Значений цвета здесь нет ни одного.
  *
- * **Трогается ровно одна сторона рамки.** `--callout-color` у блоков с цитатой
- * не переопределяется вовсе: в Obsidian 1.13 это готовый цвет, а в 1.4 (наш
- * `minAppVersion`) — тройка `r, g, b`, и одна и та же строка на двух сборках
- * дала бы либо цвет, либо ничего. Значок, заголовок и подложка коллаута
- * остаются такими, какими их сделала тема.
+ * **Коды цвета из Zotero и Apple Books.** Хайлайты, ввезённые из Zotero,
+ * помечены кодом его палитры (`beresta #ffd400`), из Apple Books — кодом его
+ * (`#fed030`, `#53d769`); в базе владельца 20261019 таких 74 из 789. Код
+ * узнаётся точным совпадением и красится краской темы того же имени.
  *
  * **`gray` в списке нет намеренно.** Серая пометка — это и есть цвет коллаута
  * `[!quote]` по умолчанию (`--callout-quote`), и красить её значило бы
- * подкрашивать серое серым. Незнакомого имени цвета и литерального `#rrggbb` в
- * списке тоже нет: угадывать чужую палитру нечем, а имя всё равно осталось в
- * исходнике заметки открытым словом.
+ * подкрашивать серое серым. Незнакомого кода цвета в списке тоже нет:
+ * угадывать чужую палитру нечем, а имя осталось в исходнике заметки словом.
  */
-.callout[data-callout-metadata~="beresta"][data-callout-metadata~="blue"] {
-  --beresta-mark-color: var(--color-blue);
-}
-.callout[data-callout-metadata~="beresta"][data-callout-metadata~="yellow"] {
-  --beresta-mark-color: var(--color-yellow);
-}
-.callout[data-callout-metadata~="beresta"][data-callout-metadata~="green"] {
-  --beresta-mark-color: var(--color-green);
-}
-.callout[data-callout-metadata~="beresta"][data-callout-metadata~="red"] {
-  --beresta-mark-color: var(--color-red);
-}
-.callout[data-callout-metadata~="beresta"][data-callout-metadata~="purple"] {
-  --beresta-mark-color: var(--color-purple);
-}
-.callout[data-callout-metadata~="beresta"][data-callout-metadata~="orange"] {
-  --beresta-mark-color: var(--color-orange);
-}
-/* `magenta` наше, `pink` — имя той же краски у Obsidian. */
-.callout[data-callout-metadata~="beresta"][data-callout-metadata~="magenta"] {
-  --beresta-mark-color: var(--color-pink);
-}
-
-/* Корешок — у всех наших блоков одинаковой ширины, и цветной там, где цвет
-   узнан. Ширина одна и та же нарочно: иначе блок с незнакомым цветом стоял бы
-   в секции на три точки левее соседей без всякой причины. */
-.callout[data-callout-metadata~="beresta"] {
-  border-inline-start: 3px solid var(--beresta-mark-color, transparent);
-}
 
 /* Пометка без цитаты (`[!note]`) не заводит СВОЕГО цвета.
  *
  * `[!note]` у Obsidian синий — и на блоке, помеченном жёлтым, спорили бы два
- * цвета: синяя подложка от вида коллаута и жёлтый корешок от самой пометки.
- * Цвет на блоке один, и он принадлежит пометке человека, а не нашему выбору
- * коллаута. Серым здесь берётся цвет цитаты, а не своё значение: у него в
- * каждой сборке Obsidian та же форма записи, что у `--callout-color` рядом, —
- * поэтому строка верна и на 1.4, и на 1.13. Карандаш в значке остаётся: он и
- * говорит, что это пометка, а не речь автора. */
+ * цвета. Без цвета пометки она серая, как цитата; с цветом — цветом пометки:
+ * правила палитры стоят НИЖЕ и при равной точности берут верх. Карандаш в
+ * значке остаётся: он и говорит, что это пометка, а не речь автора. */
 .callout[data-callout="note"][data-callout-metadata~="beresta"] {
   --callout-color: var(--callout-quote, var(--callout-default));
+}
+
+.callout[data-callout-metadata~="beresta"][data-callout-metadata~="blue"],
+.callout[data-callout-metadata~="beresta"][data-callout-metadata~="#2ea8e5"] {
+  --callout-color: var(--color-blue-rgb);
+}
+.callout[data-callout-metadata~="beresta"][data-callout-metadata~="yellow"],
+.callout[data-callout-metadata~="beresta"][data-callout-metadata~="#ffd400"],
+.callout[data-callout-metadata~="beresta"][data-callout-metadata~="#fed030"] {
+  --callout-color: var(--color-yellow-rgb);
+}
+.callout[data-callout-metadata~="beresta"][data-callout-metadata~="green"],
+.callout[data-callout-metadata~="beresta"][data-callout-metadata~="#5fb236"],
+.callout[data-callout-metadata~="beresta"][data-callout-metadata~="#53d769"] {
+  --callout-color: var(--color-green-rgb);
+}
+.callout[data-callout-metadata~="beresta"][data-callout-metadata~="red"],
+.callout[data-callout-metadata~="beresta"][data-callout-metadata~="#ff6666"] {
+  --callout-color: var(--color-red-rgb);
+}
+.callout[data-callout-metadata~="beresta"][data-callout-metadata~="purple"],
+.callout[data-callout-metadata~="beresta"][data-callout-metadata~="#a28ae5"] {
+  --callout-color: var(--color-purple-rgb);
+}
+.callout[data-callout-metadata~="beresta"][data-callout-metadata~="orange"],
+.callout[data-callout-metadata~="beresta"][data-callout-metadata~="#f19837"] {
+  --callout-color: var(--color-orange-rgb);
+}
+/* `magenta` наше, `pink` — имя той же краски у Obsidian. */
+.callout[data-callout-metadata~="beresta"][data-callout-metadata~="magenta"],
+.callout[data-callout-metadata~="beresta"][data-callout-metadata~="#e56eee"] {
+  --callout-color: var(--color-pink-rgb);
 }
 
 /* Поле шаблона выписки в настройках: во всю ширину и моноширинным — шаблон

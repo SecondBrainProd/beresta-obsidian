@@ -39,6 +39,15 @@ export class SuggestModal<T> extends Modal {
 
 export class FuzzySuggestModal<T> extends SuggestModal<T> {}
 
+export class AbstractInputSuggest<T> {
+  limit = 100;
+  constructor(_app?: unknown, _inputEl?: unknown) {}
+  onSelect(_callback: (value: T) => unknown): this {
+    return this;
+  }
+  close(): void {}
+}
+
 export class ItemView {
   constructor(_leaf?: unknown) {}
 }

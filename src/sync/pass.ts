@@ -256,7 +256,11 @@ export async function runSync(input: SyncInput): Promise<SyncReport> {
       continue;
     }
 
-    const known = input.memory.get(path) ?? { blocks: {} };
+    // Заметка, которой на диске нет, — новая: память об этом пути осталась от
+    // удалённой предшественницы (владелец 20261019: удалил заметку Warez,
+    // завёл заново — и секция пришла пустой: три блока «помнились» записанными,
+    // и их отсутствие читалось как «человек убрал»).
+    const known = (exists ? input.memory.get(path) : undefined) ?? { blocks: {} };
     const options: MergeOptions = {
       mayCreateSection: !exists || input.mayCreateSection?.has(path) === true,
       frontmatter: { bookIds: [...bookIds], lastSync: stamp },

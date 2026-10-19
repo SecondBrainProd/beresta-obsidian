@@ -16,7 +16,7 @@ import type { SnapshotBook } from "../snapshot/model";
 import { panelWords, type PassWords } from "../ui/words";
 import { interfaceLanguage } from "./defaults";
 import { SECTION_BEGIN, SECTION_END } from "./section";
-import { renderTemplate, type TemplateValue } from "./template";
+import { renderTemplate, TemplateError, type TemplateValue } from "./template";
 
 /** Свойство заметки с именем её формата — рядом с `beresta-book-id`. */
 export const FORMAT_KEY = "beresta-format";
@@ -75,8 +75,24 @@ export function renderNote(
   format: string,
   say: PassWords = panelWords(interfaceLanguage()).pass,
 ): string {
+  if (looksLikeSectionTemplate(template)) throw new TemplateError(say.noteTemplateIsSection);
   const text = renderTemplate(template, { fields: {}, lists: {}, values: noteValues(book) }, say);
   return withFormatProperty(text, format);
+}
+
+/**
+ * Шаблон секции хайлайтов, поставленный в поле шаблона заметки (владелец
+ * 20261019): у заметки хайлайтов нет поимённо — только место
+ * `{{annotations}}`, — и такой шаблон падал на первом же значении секции
+ * («шаблон просит thought…») без слова о том, что перепутано поле. Признак —
+ * цикл по хайлайтам или якорь блока: в шаблоне заметки их не бывает.
+ */
+export function looksLikeSectionTemplate(template: string): boolean {
+  return (
+    /\{\{\s*#\s*annotations\s*\}\}/.test(template) ||
+    /\{%-?\s*for\s+\w+\s+in\s+annotations\b/.test(template) ||
+    /\{\{\s*anchor\s*\}\}/.test(template)
+  );
 }
 
 /** Вписывает `beresta-format: <имя>` в frontmatter (или заводит его). */

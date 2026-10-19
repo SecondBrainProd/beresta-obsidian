@@ -1,3 +1,7 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, test } from "vitest";
 
 import manifest from "../manifest.json";
@@ -82,6 +86,30 @@ describe("манифест проходит требования каталог�
     expect(major > 1 || minor > 7 || (minor === 7 && patch >= 2)).toBe(true);
   });
 
+
+  // ⚠️ **С 0.3.4 планку задаёт API настроек** (решение владельца 20261018):
+  // страница описана через `getSettingDefinitions()`, а он в `obsidian.d.ts` —
+  // `@since 1.13.0`. Число не переписано сюда из головы: проверка сама находит
+  // пометку у объявления в описании API и сама смотрит, зовётся ли метод в
+  // `src/`. Тот же класс, что `obsidianmd/no-unsupported-api` у каталога: на
+  // 1.12 вкладка без `display()` была бы пустой.
+  //
+  // Рез: `minAppVersion` обратно в 1.8.7 (и в `versions.json`) — краснеет.
+  test("minAppVersion не ниже @since у getSettingDefinitions, раз он в ходу", () => {
+    const root = fileURLToPath(new URL("..", import.meta.url));
+    const api = readFileSync(join(root, "node_modules/obsidian/obsidian.d.ts"), "utf8");
+    const declared = /export abstract class PluginSettingTab[\s\S]*?@since (\d+\.\d+\.\d+)\s*\*\/\s*getSettingDefinitions\(\)/.exec(
+      api,
+    );
+    expect(declared, "в obsidian.d.ts нет getSettingDefinitions у PluginSettingTab").not.toBeNull();
+    const since = declared![1]!;
+    const tab = readFileSync(join(root, "src/ui/settings-tab.ts"), "utf8");
+    expect(tab).toContain("getSettingDefinitions(");
+    const order = (version: string): number[] => version.split(".").map(Number);
+    const [a, b] = [order(manifest.minAppVersion), order(since)];
+    const notOlder = a[0]! !== b[0]! ? a[0]! > b[0]! : a[1]! !== b[1]! ? a[1]! > b[1]! : a[2]! >= b[2]!;
+    expect(notOlder, `minAppVersion ${manifest.minAppVersion} старше ${since}`).toBe(true);
+  });
 
   test("версия плагина указана в versions.json с той же планкой", () => {
     const table = versions as Record<string, string>;

@@ -268,6 +268,7 @@ export interface PassWords {
   readonly templateUnclosed: string;
   readonly templateBrokenBraces: string;
   readonly templateUnknownName: string;
+  readonly noteTemplateIsSection: string;
   /**
    * Подстановщик второй версии (план шаблонов, задача 2): `{line}` — номер
    * строки шаблона, `{message}` — что не так, `{name}` — имя фильтра или метки,
@@ -490,6 +491,10 @@ const RUSSIAN: PanelWords = {
       "или «{{/имя}}», имя из латинских букв и цифр",
     templateUnknownName:
       "шаблон просит «{name}» ({where}), а такого значения здесь нет. Доступны: {known}",
+    noteTemplateIsSection:
+      "в поле «Файл шаблона заметки» стоит шаблон секции хайлайтов — в нём цикл по " +
+      "хайлайтам и {{anchor}}. Укажите там шаблон всей заметки (например " +
+      "Templates/Beresta Book.md), а этот файл — в поле «Файл шаблона секции хайлайтов».",
     templateAtLine: "строка {line}: {message}",
     templateUnknownFilter: "фильтра «{name}» нет. Есть: {known}",
     templateBadTag: "метка «{tag}» не разбирается",
@@ -999,6 +1004,10 @@ const ENGLISH: PanelWords = {
     templateUnknownName:
       "the template asks for “{name}” ({where}), and there is no such value here. " +
       "Available: {known}",
+    noteTemplateIsSection:
+      "the “Note template file” field holds a highlights section template — it loops " +
+      "over highlights and has {{anchor}}. Put a whole-note template there (for example " +
+      "Templates/Beresta Book.md), and this file into the “Highlight section template file” field.",
     templateAtLine: "line {line}: {message}",
     templateUnknownFilter: "there is no filter “{name}”. Available: {known}",
     templateBadTag: "the tag “{tag}” cannot be parsed",

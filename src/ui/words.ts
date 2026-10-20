@@ -304,6 +304,7 @@ export interface PanelWords {
   readonly commands: {
     readonly syncNow: string;
     readonly bindBooks: string;
+    readonly highlightsOfBook: string;
     readonly showConflicts: string;
     readonly returnSection: string;
     readonly confirmRemovals: string;
@@ -330,6 +331,15 @@ export interface PanelWords {
     readonly noteCreated: string;
     /** `{format}` — имя, которого в настройках больше нет; `{paths}` — заметки с ним (Н4). */
     readonly formatGone: string;
+    /** Команда «Хайлайты книги…» (постановка 20261019). `{path}` — заметка записи. */
+    readonly pickAnyBook: string;
+    readonly choiceArticle: string;
+    readonly choiceNote: string;
+    readonly refreshed: string;
+    readonly emptyExport: string;
+    readonly offerDefaults: string;
+    readonly offerDefaultsYes: string;
+    readonly offerDefaultsNo: string;
   };
   /** Уведомления в углу окна. Каждое начинается с «Beresta:» — их источник виден сразу. */
   readonly notices: {
@@ -667,7 +677,8 @@ const RUSSIAN: PanelWords = {
     },
     hint: {
       noExport:
-        "Выгрузки Beresta в этом хранилище ещё нет. Приложение пишет её само; " +
+        "Выгрузки Beresta в этом хранилище ещё нет. Подключите хранилище в приложении " +
+        "Береста (на Маке: «Файл → Подключить Obsidian…») — выгрузка появится сама; " +
         "заметки до тех пор не трогаются.",
       unreadable:
         "Указатель выгрузки не разбирается. Заметки не трогаются, пока он не " +
@@ -696,7 +707,8 @@ const RUSSIAN: PanelWords = {
     syncNow: {
       noExport:
         "Beresta: выгрузки Beresta в этом хранилище нет — раскладывать нечего. " +
-        "Приложение пишет её само; заметки до тех пор не трогаются.",
+        "Подключите хранилище в приложении Береста (на Маке: «Файл → Подключить " +
+        "Obsidian…»); заметки до тех пор не трогаются.",
       unreadable:
         "Beresta: указатель выгрузки не разбирается — заметки не тронуты. " +
         "Обычно это лечится следующей выгрузкой из приложения.",
@@ -739,6 +751,7 @@ const RUSSIAN: PanelWords = {
   commands: {
     syncNow: "Разложить хайлайты сейчас",
     bindBooks: "Привязать книги к заметкам",
+    highlightsOfBook: "Перенести хайлайты книги в заметку…",
     showConflicts: "Показать расхождения",
     returnSection: "Вернуть секцию Beresta в эту заметку",
     confirmRemovals: "Подтвердить удаление блоков в этой заметке",
@@ -763,6 +776,16 @@ const RUSSIAN: PanelWords = {
     formatGone:
       "Beresta: формата «{format}» в настройках больше нет, а его помнят заметки: {paths}. " +
       "Блоки в них рисуются стандартным шаблоном — назначьте им другой формат командой.",
+    pickAnyBook: "Книга или статья — хайлайты в её заметку",
+    choiceArticle: "статья",
+    choiceNote: "заметка: {path}",
+    refreshed: "Beresta: хайлайты в «{path}» обновлены.",
+    emptyExport: "Beresta: в выгрузке нет ни одной книги.",
+    offerDefaults:
+      "Форматов заметок ещё нет. Поставить готовые «Книга» и «Статья»? В Templates/ лягут " +
+      "файлы их шаблонов (существующие не перезаписываются).",
+    offerDefaultsYes: "Поставить и продолжить",
+    offerDefaultsNo: "Без формата",
   },
   notices: {
     passFailed: "Beresta: проход не удался — {message}",
@@ -775,8 +798,8 @@ const RUSSIAN: PanelWords = {
       "Beresta: секция не вернулась. Похоже, эта заметка не привязана ни к одной " +
       "книге — привяжите её командой «Привязать книги к заметкам».",
     noExport:
-      "Beresta: выгрузки в этом хранилище нет ({path}). Сделайте выгрузку в " +
-      "приложении — и книги появятся здесь.",
+      "Beresta: выгрузки в этом хранилище нет ({path}). Подключите это хранилище в " +
+      "приложении Береста (на Маке: «Файл → Подключить Obsidian…») — и книги появятся здесь.",
     bindingNotSaved:
       "Beresta: хайлайты не легли — выгрузки Beresta сейчас не видно. Привязка " +
       "не записана: выберите заново, когда выгрузка появится.",
@@ -1178,7 +1201,8 @@ const ENGLISH: PanelWords = {
     },
     hint: {
       noExport:
-        "There is no Beresta export in this vault yet. The app writes it by itself; " +
+        "There is no Beresta export in this vault yet. Connect the vault in the Beresta " +
+        "app (on a Mac: File → Connect Obsidian…) and the export appears by itself; " +
         "notes are left alone until then.",
       unreadable:
         "The export index cannot be parsed. Notes are left alone until it becomes " +
@@ -1207,7 +1231,8 @@ const ENGLISH: PanelWords = {
     syncNow: {
       noExport:
         "Beresta: there is no Beresta export in this vault — nothing to lay out. " +
-        "The app writes it by itself; notes are left alone until then.",
+        "Connect the vault in the Beresta app (on a Mac: File → Connect Obsidian…); " +
+        "notes are left alone until then.",
       unreadable:
         "Beresta: the export index cannot be parsed — notes were not touched. " +
         "Usually the next export from the app fixes this.",
@@ -1250,6 +1275,7 @@ const ENGLISH: PanelWords = {
   commands: {
     syncNow: "Lay out highlights now",
     bindBooks: "Bind books to notes",
+    highlightsOfBook: "Import highlights of a book…",
     showConflicts: "Show discrepancies",
     returnSection: "Return the Beresta section to this note",
     confirmRemovals: "Confirm removing blocks from this note",
@@ -1274,6 +1300,16 @@ const ENGLISH: PanelWords = {
     formatGone:
       "Beresta: the “{format}” format is no longer in the settings, but these notes still name it: {paths}. " +
       "Their blocks use the standard template — assign them another format with the command.",
+    pickAnyBook: "Book or article — highlights into its note",
+    choiceArticle: "article",
+    choiceNote: "note: {path}",
+    refreshed: "Beresta: highlights in “{path}” updated.",
+    emptyExport: "Beresta: the export has no books.",
+    offerDefaults:
+      "There are no note formats yet. Add the ready-made “Book” and “Article”? Their template files " +
+      "go to Templates/ (existing files are not overwritten).",
+    offerDefaultsYes: "Add and continue",
+    offerDefaultsNo: "No format",
   },
   notices: {
     passFailed: "Beresta: the pass failed — {message}",
@@ -1286,8 +1322,8 @@ const ENGLISH: PanelWords = {
       "Beresta: the section did not come back. This note seems to be bound to no " +
       "book — bind it with “Bind books to notes”.",
     noExport:
-      "Beresta: there is no export in this vault ({path}). Export from the app, " +
-      "and the books will appear here.",
+      "Beresta: there is no export in this vault ({path}). Connect this vault in the " +
+      "Beresta app (on a Mac: File → Connect Obsidian…), and the books will appear here.",
     bindingNotSaved:
       "Beresta: the highlights were not laid out — the Beresta export is not visible " +
       "right now. The binding was not saved: choose again once the export appears.",

@@ -132,6 +132,7 @@ describe("команды по языку", () => {
       returnSection: () => undefined,
       confirmRemovals: () => undefined,
       restoreVersion: () => undefined,
+      highlightsOfBook: () => undefined,
     };
     const byLanguage = (words: PanelWords) =>
       commandSpecs(actions, words.commands).map((one) => [one.id, one.name] as const);

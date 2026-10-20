@@ -69,7 +69,7 @@ import {
   type NumberField,
 } from "../settings";
 import type { NoteFormat } from "../settings";
-import { defaultFormats, defaultSectionFile } from "../render/default-formats";
+import { installDefaultFormats } from "../render/default-formats";
 import { interfaceLanguage } from "../render/defaults";
 import { TemplateFileSuggest } from "./file-suggest";
 import { fill, panelWords, type SettingsWords } from "./words";
@@ -256,33 +256,11 @@ export class BerestaSettingTab extends PluginSettingTab {
           setting.addButton((button) => {
             button.setButtonText(words.addDefaults).onClick(() => {
               void (async () => {
-                const created: string[] = [];
-                const kept: string[] = [];
-                let formats = [...this.host.settingsNow().formats];
-                // Секция — тем же файлом и тем же правилом: есть — не трогаем. Оба
-                // готовых формата получают её шаблоном секции, если своего нет: так
-                // у человека живой образец цикла с {{anchor}} вместо подсказки (Н2).
-                const section = defaultSectionFile(interfaceLanguage());
-                const sectionMade = await this.host.createFile!(section.file, section.text);
-                (sectionMade ? created : kept).push(section.file);
-                for (const ready of defaultFormats(interfaceLanguage())) {
-                  const made = await this.host.createFile!(ready.file, ready.text);
-                  (made ? created : kept).push(ready.file);
-                  if (!formats.some((one) => one.name === ready.name)) {
-                    formats.push({
-                      name: ready.name,
-                      noteTemplate: ready.file,
-                      blockTemplate: section.file,
-                      pathPattern: `${ready.folder}/{{title}}.md`,
-                    });
-                  } else {
-                    formats = formats.map((one) =>
-                      one.name === ready.name && one.blockTemplate === undefined
-                        ? { ...one, blockTemplate: section.file }
-                        : one,
-                    );
-                  }
-                }
+                const { formats, created, kept } = await installDefaultFormats(
+                  this.host.settingsNow().formats,
+                  interfaceLanguage(),
+                  (path, text) => this.host.createFile!(path, text),
+                );
                 await this.host.save({ ...this.host.settingsNow(), formats });
                 this.rebuild();
                 const lines = [

@@ -14,7 +14,9 @@ import {
 import { commandSpecs, type CommandActions } from "./commands";
 import { FormatTemplates, notePathFor } from "./formats";
 import { FORMAT_KEY, renderNote } from "./render/note";
-import { FormatPickModal, BookPickModal } from "./ui/format-modals";
+import { BookChoiceModal, BookPickModal, FormatPickModal, OfferDefaultsModal } from "./ui/format-modals";
+import { bookChoices, formatsFor, type BookChoice } from "./book-choice";
+import { installDefaultFormats } from "./render/default-formats";
 import type { NoteFormat } from "./settings";
 import type { SnapshotBook } from "./snapshot/model";
 import { BOOK_ID_KEY } from "./merge/frontmatter";
@@ -165,17 +167,7 @@ export default class BerestaPlugin extends Plugin {
         },
         // Готовые форматы кладут файлы шаблонов — и НИКОГДА не перезаписывают
         // существующий: человек мог уже править свой «Книга».
-        createFile: async (path, text) => {
-          const normalized = normalizePath(path);
-          if (await this.app.vault.adapter.exists(normalized)) return false;
-          const at = normalized.lastIndexOf("/");
-          if (at > 0) {
-            const folder = normalized.slice(0, at);
-            if (this.app.vault.getAbstractFileByPath(folder) === null) await this.app.vault.createFolder(folder);
-          }
-          await this.app.vault.create(normalized, text);
-          return true;
-        },
+        createFile: (path, text) => this.createFileIfMissing(path, text),
       }),
     );
 
@@ -339,6 +331,9 @@ export default class BerestaPlugin extends Plugin {
       },
       bindBooks: async () => {
         await this.bindBooks();
+      },
+      highlightsOfBook: async () => {
+        await this.highlightsOfBook();
       },
       showConflicts: async () => {
         await this.showConflicts();
@@ -643,6 +638,88 @@ export default class BerestaPlugin extends Plugin {
     const bound = new Set<string>();
     for (const ids of (await this.bindings()).values()) ids.forEach((id) => bound.add(id));
     return snapshot.books.filter((book) => book.uuid !== "" && !bound.has(book.uuid));
+  }
+
+  /**
+   * «Хайлайты книги…» — как «Import notes» в Zotero Integration (постановка
+   * `20261019-хайлайты-одной-книги-постановка.md`): одна команда, есть всегда
+   * (Р1); поиск по всем книгам и статьям (Р2); у записи с заметкой — открыть и
+   * обновить её (Р3), без заметки — завести по формату (Р4); форматов нет —
+   * предложить готовые (Р5); выгрузки нет — словами (Р6).
+   */
+  private async highlightsOfBook(): Promise<void> {
+    this.runner.forgetSnapshot();
+    await this.run("команда");
+    const snapshot = this.runner.lastSnapshot;
+    if (snapshot === undefined || snapshot.kind !== "present") {
+      new Notice(fill(this.words.notices.noExport, { path: indexPath() }), 10_000);
+      return;
+    }
+    const choices = bookChoices(snapshot.books, await this.bindings());
+    if (choices.length === 0) {
+      new Notice(this.words.formats.emptyExport, 8_000);
+      return;
+    }
+    const words = this.words.formats;
+    new BookChoiceModal(
+      this.app,
+      choices,
+      words.pickAnyBook,
+      { article: words.choiceArticle, note: words.choiceNote },
+      // Следующее окно — после того, как это закроется: два окна выбора
+      // разом Obsidian не держит.
+      (choice) => window.setTimeout(() => void this.takeBookChoice(choice), 0),
+    ).open();
+  }
+
+  private async takeBookChoice(choice: BookChoice): Promise<void> {
+    if (choice.notes.length > 0) {
+      const path = choice.notes[0];
+      this.runner.forgetSnapshot();
+      await this.runChoice({ only: new Set(choice.notes) });
+      await this.app.workspace.openLinkText(path, "", false);
+      new Notice(fill(this.words.formats.refreshed, { path }), 6_000);
+      return;
+    }
+    let formats = this.runner.state.settings.formats;
+    if (formats.length === 0) {
+      const words = this.words.formats;
+      const install = await new Promise<boolean>((answer) => {
+        new OfferDefaultsModal(
+          this.app,
+          { text: words.offerDefaults, yes: words.offerDefaultsYes, no: words.offerDefaultsNo },
+          answer,
+        ).open();
+      });
+      if (install) {
+        const installed = await installDefaultFormats(formats, interfaceLanguage(), (path, text) =>
+          this.createFileIfMissing(path, text),
+        );
+        await this.saveSettings({ ...this.runner.state.settings, formats: installed.formats });
+        formats = installed.formats;
+      }
+    }
+    const offered = formatsFor(choice, formats);
+    if (offered.length <= 1) {
+      await this.createNotes([choice.book], offered[0]);
+      return;
+    }
+    new FormatPickModal(this.app, offered, this.words.formats.pickFormat, undefined, (format) => {
+      if (format !== undefined) window.setTimeout(() => void this.createNotes([choice.book], format), 0);
+    }).open();
+  }
+
+  /** Положить файл, если его нет; существующий не трогать никогда. Ответ — создан ли. */
+  private async createFileIfMissing(path: string, text: string): Promise<boolean> {
+    const normalized = normalizePath(path);
+    if (await this.app.vault.adapter.exists(normalized)) return false;
+    const at = normalized.lastIndexOf("/");
+    if (at > 0) {
+      const folder = normalized.slice(0, at);
+      if (this.app.vault.getAbstractFileByPath(folder) === null) await this.app.vault.createFolder(folder);
+    }
+    await this.app.vault.create(normalized, text);
+    return true;
   }
 
   /** «Новая заметка — <формат>»: выбрать книгу, завести заметку по шаблону (Р10). */

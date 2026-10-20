@@ -22,6 +22,9 @@ function spy(): { actions: CommandActions; calls: string[] } {
     bindBooks: () => {
       calls.push("bindBooks");
     },
+    highlightsOfBook: () => {
+      calls.push("highlightsOfBook");
+    },
     showConflicts: () => {
       calls.push("showConflicts");
     },
@@ -39,12 +42,13 @@ function spy(): { actions: CommandActions; calls: string[] } {
 }
 
 describe("команды", () => {
-  test("на месте все шесть, и каждая зовёт своё", () => {
+  test("на месте все семь, и каждая зовёт своё", () => {
     const { actions, calls } = spy();
     const specs = commandSpecs(actions);
     expect(specs.map((one) => one.id).sort()).toEqual([
       "bind-books",
       "confirm-removals",
+      "highlights-of-book",
       "restore-version",
       "return-section",
       "show-conflicts",
@@ -54,6 +58,7 @@ describe("команды", () => {
     expect(calls).toEqual([
       "syncNow",
       "bindBooks",
+      "highlightsOfBook",
       "showConflicts",
       "returnSection:Base/Библиотека/Джедайские техники.md",
       "confirmRemovals:Base/Библиотека/Джедайские техники.md",
@@ -79,8 +84,8 @@ describe("команды", () => {
 
   test("имена не повторяются и объясняют себя глаголом — на обоих языках", () => {
     const verbs = {
-      ru: /^(Разложить|Привязать|Показать|Вернуть|Подтвердить|Восстановить)/,
-      en: /^(Lay out|Bind|Show|Return|Confirm|Restore)/,
+      ru: /^(Разложить|Привязать|Перенести|Показать|Вернуть|Подтвердить|Восстановить)/,
+      en: /^(Lay out|Bind|Import|Show|Return|Confirm|Restore)/,
     };
     for (const [language, verb] of Object.entries(verbs)) {
       const specs = commandSpecs(spy().actions, panelWords(language).commands);

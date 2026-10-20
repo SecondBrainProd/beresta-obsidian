@@ -30,6 +30,8 @@ export interface CommandActions {
   syncNow(): Promise<void> | void;
   /** Экран привязки книг к заметкам. */
   bindBooks(): Promise<void> | void;
+  /** «Хайлайты книги…»: выбрать книгу или статью, открыть и обновить её заметку или завести. */
+  highlightsOfBook(): Promise<void> | void;
   /** Панель расхождений. */
   showConflicts(): Promise<void> | void;
   /** Вернуть секцию в заметку, из которой её стёрли. */
@@ -63,6 +65,12 @@ export function commandSpecs(
   return [
     { id: "sync-now", name: words.syncNow, needsNote: false, run: () => actions.syncNow() },
     { id: "bind-books", name: words.bindBooks, needsNote: false, run: () => actions.bindBooks() },
+    {
+      id: "highlights-of-book",
+      name: words.highlightsOfBook,
+      needsNote: false,
+      run: () => actions.highlightsOfBook(),
+    },
     {
       id: "show-conflicts",
       name: words.showConflicts,

@@ -33,6 +33,7 @@
  *   стандартный; кнопка кладёт и его (`defaultSectionFile`), чтобы человек
  *   правил живой образец, а не писал секцию с нуля по подсказке.
  */
+import type { NoteFormat } from "../settings";
 import { defaultTemplate } from "./defaults";
 
 export interface DefaultFormat {
@@ -203,4 +204,48 @@ export function defaultSectionFile(language: string): { readonly file: string; r
     file: russian ? "Templates/Береста Секция.md" : "Templates/Beresta Section.md",
     text: defaultTemplate(russian ? "ru" : "en"),
   };
+}
+
+/** Итог установки готовых форматов: новые форматы и что с файлами шаблонов. */
+export interface DefaultsInstalled {
+  readonly formats: NoteFormat[];
+  readonly created: string[];
+  readonly kept: string[];
+}
+
+/**
+ * Поставить готовые «Книга» и «Статья» — одним правилом для кнопки настроек и
+ * для команды «Хайлайты книги…» (Р5 постановки 20261019).
+ *
+ * Файлы шаблонов кладутся, только если их нет (`createFile` отвечает, создал
+ * ли): человек мог уже править свой «Книга». Формат с таким именем не
+ * заводится второй раз; у существующего без шаблона секции он появляется —
+ * живой образец цикла с {{anchor}} вместо подсказки (Н2 приёмки 20261012).
+ */
+export async function installDefaultFormats(
+  current: readonly NoteFormat[],
+  language: string,
+  createFile: (path: string, text: string) => Promise<boolean>,
+): Promise<DefaultsInstalled> {
+  const created: string[] = [];
+  const kept: string[] = [];
+  let formats = [...current];
+  const section = defaultSectionFile(language);
+  ((await createFile(section.file, section.text)) ? created : kept).push(section.file);
+  for (const ready of defaultFormats(language)) {
+    ((await createFile(ready.file, ready.text)) ? created : kept).push(ready.file);
+    if (!formats.some((one) => one.name === ready.name)) {
+      formats.push({
+        name: ready.name,
+        noteTemplate: ready.file,
+        blockTemplate: section.file,
+        pathPattern: `${ready.folder}/{{title}}.md`,
+      });
+    } else {
+      formats = formats.map((one) =>
+        one.name === ready.name && one.blockTemplate === undefined ? { ...one, blockTemplate: section.file } : one,
+      );
+    }
+  }
+  return { formats, created, kept };
 }

@@ -20,6 +20,9 @@ permissions:
   contents: write
   id-token: write
   attestations: write
+  # Нужно `actions/attest@v4` (README действия): сведения о файле в реестр
+  # артефактов.
+  artifact-metadata: write
 
 jobs:
   release:
@@ -53,7 +56,10 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/attest-build-provenance@v2
+      # `actions/attest@v4` — так в руководстве Obsidian «Release your plugin
+      # with GitHub Actions» (20261022); `attest-build-provenance` — прежняя
+      # обёртка над ним. Без входов предиката он выдаёт ту же SLSA provenance.
+      - uses: actions/attest@v4
         with:
           subject-path: |
             main.js

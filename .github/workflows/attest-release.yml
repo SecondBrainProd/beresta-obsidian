@@ -1,0 +1,82 @@
+# Свидетельство происхождения для релиза, выложенного руками.
+#
+# ⚠️ Заведено 20261022. С 0.3.0 по 0.3.5 workflow «Release» не запускался
+# вовсе («account is locked due to a billing issue»), и релизы выложены
+# вручную — без свидетельств. Каталог Obsidian отметил это в проверке 0.3.3
+# (раздел Releases: «Missing GitHub artifact attestations»).
+#
+# Свидетельство здесь выдаётся задним числом, и честным оно остаётся только
+# при одном условии: файлы, собранные сейчас из тега, БАЙТ В БАЙТ те же, что
+# лежат в релизе. Это сверяется до подписи (`.github/scripts/same-as-release.sh`);
+# разошлись — подписи нет, прогон красный. Сборка плагина воспроизводима:
+# 20261022 все шесть релизов 0.3.0–0.3.5 пересобраны из своих тегов и совпали
+# с релизами по SHA-256 у всех трёх файлов.
+#
+# Запуск: Actions → «Attest a release» → Run workflow → тег (`0.3.5`).
+# Проверка человеком: `gh attestation verify main.js --repo SecondBrainProd/beresta-obsidian`.
+name: Attest a release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Тег релиза, например 0.3.5"
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+  artifact-metadata: write
+
+jobs:
+  attest:
+    runs-on: ubuntu-latest
+    steps:
+      # Тег — только вида 1.2.3: дальше он идёт в команды оболочки.
+      - name: Проверить тег
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          if ! printf '%s' "$TAG" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "тег «$TAG» — не версия вида 1.2.3" >&2
+            exit 1
+          fi
+
+      # Сверка живёт в ветке, с которой запущен workflow, а исходники — в теге.
+      - uses: actions/checkout@v4
+        with:
+          path: tools
+
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          path: build
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: build/package-lock.json
+
+      - name: Собрать из тега
+        working-directory: build
+        run: |
+          npm ci
+          npm run build
+
+      - name: Скачать файлы релиза
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir released --pattern main.js --pattern manifest.json --pattern styles.css
+
+      - name: Сверить сборку с релизом байт в байт
+        run: bash tools/.github/scripts/same-as-release.sh build released
+
+      - uses: actions/attest@v4
+        with:
+          subject-path: |
+            released/main.js
+            released/manifest.json
+            released/styles.css

@@ -558,7 +558,7 @@ describe("слияние", () => {
     // ⚠️ Заголовок берётся У ШАБЛОНА, а не литералом: с 20260925 он зависит от
     // языка интерфейса (долг 0.3а), и литерал сделал бы проверку зелёной только
     // при русском умолчании. В узле языка нет вовсе — умолчание английское.
-    const heading = defaultTemplate().split("\n")[0];
+    const heading = defaultTemplate().split("\n").find((line) => line.startsWith("## ")) ?? "";
     const renamed = previous.text.replace(heading, "## Цитаты (мои пометки ниже)");
 
     const result = merge(renamed, render([A, B, C]), previous.known);

@@ -32,6 +32,16 @@ export const BOOK_ID_KEY = "beresta-book-id";
 /** Имя ключа с отметкой о том, на какой момент данные в этой заметке. */
 export const LAST_SYNC_KEY = "beresta-last-sync";
 
+/**
+ * Имя ключа с оценкой книги 1–5 — своей осью Beresta, последней оценкой
+ * закрытого прохода (решение владельца 20261031: «оценка — своя ось вместо
+ * Calibre»). Третий ключ плагина: свойство заметки, по которому человек
+ * сортирует и отбирает книги, а шаблон заметки исполняется один раз и оценку,
+ * поставленную после первой выписки, не узнал бы никогда. Свой ключ — с
+ * приставкой `beresta-`: своё «Оценка» человека плагин не трогает.
+ */
+export const RATING_KEY = "beresta-rating";
+
 /** Черта, ограничивающая блок frontmatter. */
 const FENCE = /^---[\t \r]*$/;
 
@@ -109,6 +119,11 @@ export function frontmatterValues(block: readonly string[], key: string): string
 export interface FrontmatterPatch {
   readonly bookIds?: readonly string[];
   readonly lastSync?: string;
+  /**
+   * Оценка: число — положить, `null` — оценки нет, снять ключ, если он есть
+   * (оценку сняли в приложении), `undefined` — не трогать.
+   */
+  readonly rating?: number | null;
 }
 
 /**
@@ -129,12 +144,21 @@ export function applyFrontmatter(
   if (patch.lastSync !== undefined && patch.lastSync !== "") {
     entries.push({ key: LAST_SYNC_KEY, value: [`${LAST_SYNC_KEY}: ${scalar(patch.lastSync)}`] });
   }
-  if (entries.length === 0) return [...lines];
+  if (typeof patch.rating === "number" && Number.isInteger(patch.rating)) {
+    entries.push({ key: RATING_KEY, value: [`${RATING_KEY}: ${patch.rating}`] });
+  }
+  const dropRating = patch.rating === null;
+  if (entries.length === 0 && !dropRating) return [...lines];
 
   const split = splitFrontmatter(lines);
   let block = split.frontmatter === undefined ? ["---", "---"] : [...split.frontmatter];
   for (const entry of entries) {
     block = putKey(block, entry.key, entry.value);
+  }
+  if (dropRating) {
+    // Снимаем только СВОЙ ключ; блока не было — заводить его ради снятия незачем.
+    if (split.frontmatter === undefined && entries.length === 0) return [...lines];
+    block = dropKey(block, RATING_KEY);
   }
   return [...block, ...split.body];
 }
@@ -187,6 +211,12 @@ function putKey(block: readonly string[], key: string, value: readonly string[])
   }
   const closing = block.length - 1;
   return [...block.slice(0, closing), ...value, ...block.slice(closing)];
+}
+
+function dropKey(block: readonly string[], key: string): string[] {
+  const found = findKey(block, key);
+  if (found === undefined) return [...block];
+  return [...block.slice(0, found.start), ...block.slice(found.end)];
 }
 
 function listLines(key: string, values: readonly string[]): string[] {

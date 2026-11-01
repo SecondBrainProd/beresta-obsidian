@@ -38,6 +38,8 @@ export interface NoteWords {
   readonly heading: string;
   /** Подпись перед мыслью человека о выписке. */
   readonly thought: string;
+  /** Заголовок раздела отзыва о книге внутри секции (решение владельца 20261031). */
+  readonly verdict: string;
   /** Подпись ссылки, когда времени выделения нет и подписать датой нечем. */
   readonly open: string;
   /** Сокращение «страница» в имени пометки без цитаты. */
@@ -70,6 +72,7 @@ export interface NoteWords {
 const RUSSIAN: NoteWords = {
   heading: "## Хайлайты из Beresta",
   thought: "**Мысль.**",
+  verdict: "### Отзыв",
   open: "Открыть в Beresta",
   page: "стр.",
   mark: "Пометка",
@@ -98,6 +101,7 @@ const RUSSIAN: NoteWords = {
 const ENGLISH: NoteWords = {
   heading: "## Highlights from Beresta",
   thought: "**Thought.**",
+  verdict: "### Review",
   open: "Open in Beresta",
   page: "p.",
   mark: "Mark",

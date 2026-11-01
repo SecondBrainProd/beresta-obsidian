@@ -131,14 +131,19 @@ export function interfaceLanguage(): string {
 export function defaultTemplate(language: string = interfaceLanguage()): string {
   const words = noteWords(language);
   const russian = noteWords("ru");
-  return DEFAULT_TEMPLATE.replace(russian.heading, () => words.heading).replace(
-    russian.thought,
-    () => words.thought,
-  );
+  return DEFAULT_TEMPLATE.replace(russian.heading, () => words.heading)
+    .replace(russian.thought, () => words.thought)
+    .replace(russian.verdict, () => words.verdict);
 }
 
 export const DEFAULT_TEMPLATE = [
+  // Заголовок «Хайлайты» — только у книги, у которой они есть: с 20261031 в
+  // снимке бывают книги без единой цитаты, но с отзывом, оценкой или мыслью
+  // (слово владельца «Да, выгружать»), и заголовок над пустотой врал бы. У
+  // книги с хайлайтами секция побайтово та же, что была.
+  "{{#highlighted}}",
   "## Хайлайты из Beresta",
+  "{{/highlighted}}",
   // Мысль о книге — простым абзацем, без своей подпорки: это слова человека, и
   // украшать их незачем. Пусто — строки нет вовсе.
   "{{#thought}}",
@@ -149,6 +154,18 @@ export const DEFAULT_TEMPLATE = [
   // человека в заметке затиралась бы каждым проходом.
   "^{{thoughtAnchor}}",
   "{{/thought}}",
+  // Отзыв о книге — своим разделом, абзацами как написан (решение владельца
+  // 20261031). Свой якорь — по тому же доводу, что у мысли: правка человека
+  // в заметке замораживает блок и не затирается следующим проходом. Пусто —
+  // раздела нет вовсе, и секция книги без отзыва не меняется ни байтом.
+  "{{#verdict}}",
+  "",
+  "### Отзыв",
+  "",
+  "{{verdict}}",
+  "",
+  "^{{verdictAnchor}}",
+  "{{/verdict}}",
   "{{#annotations}}",
   "",
   "> [!{{callout}}]+ {{heading}}",

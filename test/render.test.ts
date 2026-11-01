@@ -145,7 +145,7 @@ describe("отрисовка секции", () => {
     // Порядок — решение владельца: мысль о книге про книгу целиком, цитаты про
     // места в ней. Сверяется СМЕЩЕНИЯМИ, а не глазами.
     const thoughtAt = out.indexOf("шаг должен быть меньше страха");
-    const headingAt = out.indexOf(DEFAULT_TEMPLATE.split("\n")[0]);
+    const headingAt = out.indexOf(DEFAULT_TEMPLATE.split("\n").find((line) => line.startsWith("## ")) ?? "");
     const quoteAt = out.indexOf("> [!");
     expect(headingAt).toBeLessThan(thoughtAt);
     expect(thoughtAt).toBeLessThan(quoteAt);
@@ -164,7 +164,7 @@ describe("отрисовка секции", () => {
 
     expect(empty).toEqual(withThought);
     // И между заголовком и первой цитатой — ровно одна пустая строка, как было.
-    expect(withThought).toContain(`${DEFAULT_TEMPLATE.split("\n")[0]}\n\n> [!`);
+    expect(withThought).toContain(`${DEFAULT_TEMPLATE.split("\n").find((line) => line.startsWith("## ")) ?? ""}\n\n> [!`);
   });
 
   // Вырежьте в `render` ветку «пустое значение — кусок не рисуется» — тест

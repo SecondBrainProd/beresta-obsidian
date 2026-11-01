@@ -52,6 +52,7 @@ export function noteValues(book: SnapshotBook): Record<string, TemplateValue> {
     collections: details?.collections ?? [],
     readStatus: details?.readStatus ?? "",
     rating: details?.rating,
+    verdict: details?.verdict ?? "",
     addedAt: details?.addedAt ?? "",
     finishedAt: details?.finishedAt ?? "",
     count: String(book.annotations.length),

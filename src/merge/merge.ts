@@ -272,6 +272,9 @@ function frontmatterFor(
   const applied: FrontmatterPatch = {
     bookIds: patch.bookIds,
     lastSync: sectionChanged ? patch.lastSync : undefined,
+    // Оценка — свойство книги, а не секции: кладётся каждым проходом, и
+    // смена её одной будит запись так же, как смена выписки.
+    rating: patch.rating,
   };
   return applyFrontmatter(lines, applied);
 }

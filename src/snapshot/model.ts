@@ -144,7 +144,17 @@ export interface SnapshotRecordDetails {
   tags: string[];
   collections: string[];
   readStatus: string | undefined;
+  /**
+   * Оценка 1–5 — своя ось Beresta: последняя оценка закрытого прохода. С
+   * 20261031 оценка Calibre в снимок не едет (решение владельца).
+   */
   rating: number | undefined;
+  /**
+   * Отзыв о книге своими словами — последний приговор закрытого прохода,
+   * абзацами, как написан. Рисуется разделом «Отзыв» в машинной секции.
+   * Необязательно: у снимка до 20261031 поля нет.
+   */
+  verdict?: string | undefined;
   addedAt: string | undefined;
   finishedAt: string | undefined;
 }

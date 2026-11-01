@@ -263,7 +263,9 @@ export async function runSync(input: SyncInput): Promise<SyncReport> {
     const known = (exists ? input.memory.get(path) : undefined) ?? { blocks: {} };
     const options: MergeOptions = {
       mayCreateSection: !exists || input.mayCreateSection?.has(path) === true,
-      frontmatter: { bookIds: [...bookIds], lastSync: stamp },
+      // Оценка — первой книги заметки, у которой она есть (своя ось Beresta,
+      // решение владельца 20261031); ни у одной нет — ключ снимается.
+      frontmatter: { bookIds: [...bookIds], lastSync: stamp, rating: ratingOf(books) },
       allowRemovals: input.allowRemovals?.has(path) === true,
       removalShare: input.settings.removalShare,
       removalCount: input.settings.removalCount,
@@ -386,4 +388,13 @@ function quotesInSection(text: string): number {
 function setOrDrop<T>(into: Record<string, readonly T[]>, path: string, items: readonly T[]): void {
   if (items.length > 0) into[path] = [...items];
   else delete into[path];
+}
+
+/** Оценка заметки: первая найденная у её книг, иначе `null` — «оценки нет». */
+function ratingOf(books: readonly SnapshotBook[]): number | null {
+  for (const book of books) {
+    const rating = book.details?.rating;
+    if (typeof rating === "number" && Number.isInteger(rating)) return rating;
+  }
+  return null;
 }

@@ -232,7 +232,8 @@ jq 'keys, (.books[0] | keys), (.books | length), ([.books[].total] | add)' \
 | `beresta:bookTags` | внутри `beresta:book` | Метки САМОЙ книги по имени. Метки выписок живут у выписок (`TextualBody` с `purpose: tagging`) |
 | `beresta:collections` | внутри `beresta:book` | Имена живых коллекций, где стоит книга |
 | `beresta:readStatus` | внутри `beresta:book` | Статус чтения: `unread`, `inbox`, `reading`, `paused`, `stopped`, `read`. Есть всегда |
-| `beresta:rating` | внутри `beresta:book` | Оценка человека, целое |
+| `beresta:rating` | внутри `beresta:book` | Оценка человека, целое 1–5: последняя оценка закрытого прохода (дочитана или брошена) |
+| `beresta:verdict` | внутри `beresta:book` | Отзыв о книге своими словами — последний приговор закрытого прохода, дословно, абзацы через пустую строку. Пусто — поля нет |
 | `beresta:addedAt` | внутри `beresta:book` | Момент добавления в библиотеку, ISO 8601 в UTC. Есть всегда |
 | `beresta:finishedAt` | внутри `beresta:book` | Момент, когда книгу дочитали, ISO 8601 в UTC |
 | `beresta:removed` | собрание | Надгробия мягко удалённых выписок |
@@ -343,6 +344,18 @@ jq '[.books[].removedTotal] | add' <хранилище>/.beresta/index.json
   разойдутся молча. Совпадение стоит проверкой
   (`packages/obsidian-plugin/test/vault-export-doc.test.ts`), а не соглашением
   между людьми.
+
+**Смена источника значения — 20261031, слово владельца.** `beresta:rating`
+сохранил имя, тип и шкалу (целое 1–5), но значение берётся теперь из своей оси
+Beresta — последней оценки закрытого прохода, — а не из Calibre: «оценку Calibre
+не выгружать». У книги с оценкой только в Calibre поля больше нет. Версия не
+растёт: форма поля та же. Тем же днём добавлено поле `beresta:verdict` (отзыв).
+
+**Книги без хайлайтов — 20261031, слово владельца «Да, выгружать».** В снимке
+есть осколок и у книги без единой выписки, если о ней есть что сказать: мысль
+о книге, отзыв или оценка закрытого прохода. У такого осколка нет страницы
+(`first`/`last`), `total` = 0, а `beresta:book` несёт всё прочее. Это новая
+книга в снимке, а не новая форма: версия не растёт.
 
 ### Терпимость к незнакомому
 
@@ -628,7 +641,8 @@ Fifteen names, and that is the whole list. The `beresta:` prefix expands to
 | `beresta:bookTags` | inside `beresta:book` | Tags of the BOOK itself, by name. Highlight tags live on highlights (`TextualBody` with `purpose: tagging`) |
 | `beresta:collections` | inside `beresta:book` | Names of the live collections the book is on |
 | `beresta:readStatus` | inside `beresta:book` | Reading status: `unread`, `inbox`, `reading`, `paused`, `stopped`, `read`. Always present |
-| `beresta:rating` | inside `beresta:book` | The reader's rating, an integer |
+| `beresta:rating` | inside `beresta:book` | The reader's rating, an integer 1–5: the last rating of a closed reading (finished or abandoned) |
+| `beresta:verdict` | inside `beresta:book` | The reader's review of the book in their own words — the last verdict of a closed reading, verbatim, paragraphs separated by a blank line. Empty — no key |
 | `beresta:addedAt` | inside `beresta:book` | When added to the library, ISO 8601 in UTC. Always present |
 | `beresta:finishedAt` | inside `beresta:book` | When the book was finished, ISO 8601 in UTC |
 | `beresta:removed` | collection | Tombstones of softly deleted highlights |
@@ -744,6 +758,20 @@ Hence the obligations on both sides.
   they will diverge silently. The agreement is held by a test
   (`packages/obsidian-plugin/test/vault-export-doc.test.ts`), not by an
   understanding between people.
+
+**A change of the value's source — 20261031, the owner's decision.**
+`beresta:rating` keeps its name, type and scale (an integer 1–5), but its value
+now comes from Beresta's own axis — the last rating of a closed reading — and not
+from Calibre: "do not export the Calibre rating". A book rated only in Calibre no
+longer has the key. The version does not grow: the shape of the field is the
+same. The same day added the `beresta:verdict` key (the review).
+
+**Books without highlights — 20261031, the owner's decision "Yes, export".** A
+book with not a single highlight still has a shard when there is something to
+say about it: the reader's thought, a review or a rating of a closed reading.
+Such a shard has no page (`first`/`last`), `total` is 0, and `beresta:book`
+carries the rest. That is a new book in the snapshot, not a new shape: the
+version does not grow.
 
 ### Tolerating the unknown
 

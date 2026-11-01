@@ -92,7 +92,8 @@ describe("Слова заметки по языку интерфейса", () =>
   // до 20260925 она утверждала «расходится одна строка» и была права, а перевод
   // подписи мысли сделал её две. Утверждение о числе краснеет и на пропущенном
   // переводе, и на лишнем — то есть остаётся полезным, когда словарь вырастет.
-  test("шаблоны расходятся ровно двумя строками: заголовок и подпись мысли", () => {
+  // С 20261031 строк три: добавился заголовок раздела отзыва («### Отзыв»).
+  test("шаблоны расходятся ровно тремя строками: заголовок, раздел отзыва и подпись мысли", () => {
     pretendLanguage("en");
     const english = defaultTemplate().split("\n");
     const russian = DEFAULT_TEMPLATE.split("\n");
@@ -101,13 +102,15 @@ describe("Слова заметки по языку интерфейса", () =>
     const differing = russian
       .map((line, at) => (line === english[at] ? undefined : at))
       .filter((at): at is number => at !== undefined);
-    expect(differing.length).toBe(2);
+    expect(differing.length).toBe(3);
     expect(russian[differing[0]]).toBe("## Хайлайты из Beresta");
     expect(english[differing[0]]).toBe("## Highlights from Beresta");
-    expect(russian[differing[1]]).toContain("**Мысль.**");
-    expect(english[differing[1]]).toContain("**Thought.**");
+    expect(russian[differing[1]]).toBe("### Отзыв");
+    expect(english[differing[1]]).toBe("### Review");
+    expect(russian[differing[2]]).toContain("**Мысль.**");
+    expect(english[differing[2]]).toContain("**Thought.**");
     // И подстановка внутри строки уцелела: перевод бьёт по слову, а не по метке.
-    expect(english[differing[1]]).toContain("{{comment}}");
+    expect(english[differing[2]]).toContain("{{comment}}");
   });
 
   // MARK: - Слова внутри блока

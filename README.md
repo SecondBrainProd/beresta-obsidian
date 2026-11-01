@@ -13,7 +13,7 @@ The point is the *next to*. Your reading lives in two halves — quotes in a rea
 
 ## Language
 
-The section the plugin writes follows the language of your Obsidian interface: the heading, the *Thought.* label, the words for an ink stroke or an underline. It knows English and Russian; any other interface language gets English.
+The section the plugin writes follows the language of your Obsidian interface: the heading, the *Thought.* label, the *Review* heading, the words for an ink stroke or an underline. It knows English and Russian; any other interface language gets English.
 
 **So does everything the plugin says to you:** the commands, the notices, the settings page, the status bar, the binding window, the conflicts panel and the backup window. English and Russian; any other interface language gets English. The plugin was built for a Russian-speaking reader first, so the Russian wording is the original and the English follows it.
 
@@ -65,7 +65,7 @@ The heading is `## Хайлайты из Beresta` when your Obsidian is in Russi
 
 Read that as four separate rules.
 
-- **Outside the markers is yours.** The plugin does not write there, and does not read there for data either. Your headings, your ratings, your links, the four years of notes above the section — bytes preserved.
+- **Outside the markers is yours.** The plugin does not write there, and does not read there for data either. Your headings, your ratings, your links, the four years of notes above the section — bytes preserved. The one exception is the plugin's own frontmatter keys, all named `beresta-…`: among them, since 0.4.0, `beresta-rating` — the book's rating 1–5 from Beresta, updated on every pass and removed when the rating is cleared in the app. A `rating` or `Оценка` property of your own is left alone.
 - **The block anchor addresses the callout above it.** `^hl-…` on its own line after a blank line is what makes `[[Note#^hl-…]]` resolve to the whole quote. That layout was measured on a live Obsidian against two alternatives, three ways each, with a negative control.
 - **The anchor is derived from the highlight's own id and from nothing else** — not from its position, not from its neighbours. Delete one highlight and the rest keep their anchors, so links you made to them keep working.
 - **The blank line before the closing marker is not spacing either.** A block id that shares a paragraph with the next line stops being a block id: without that blank line the last `^hl-…` in every section showed up as literal text under the last quote in reading view. Measured on a live Obsidian on 20260925, fixed the same day.

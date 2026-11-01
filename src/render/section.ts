@@ -146,14 +146,25 @@ export function renderBookBody(
       // выписки невозможным ПО УСТРОЙСТВУ, а не по вероятности: якорь выписки —
       // это `hl-` и 32 знака шестнадцатеричных, букве «t» там взяться неоткуда.
       thoughtAnchor: thoughtAnchorFor(book),
+      // Отзыв о книге — последний приговор закрытого прохода (решение
+      // владельца 20261031), абзацами как написан. Пусто — `{{#verdict}}`
+      // раздела не покажет. Якорь свой, `hl-verdict-…`, — по доводу мысли выше.
+      verdict: book.details?.verdict ?? "",
+      verdictAnchor: verdictAnchorFor(book),
       count: String(ordered.length),
+      // Есть ли у книги живые хайлайты: без них шаблон по умолчанию не ставит
+      // заголовок «Хайлайты» (книга с одним отзывом, 20261031).
+      highlighted: ordered.length > 0 ? "1" : "",
       uuid: book.uuid,
     },
     lists: {
       annotations: ordered.map((annotation) => itemScope(book, annotation, offset, words)),
     },
   };
-  return renderTemplate(template, scope, say);
+  const body = renderTemplate(template, scope, say);
+  // Без заголовка тело начиналось бы пустой строкой перед мыслью или отзывом.
+  // Срезается только у книги БЕЗ хайлайтов — у остальных байты прежние.
+  return ordered.length > 0 ? body : body.replace(/^\n+/, "");
 }
 
 /**
@@ -220,6 +231,13 @@ export function wrapSection(
 /// `thought-` разводит пространства имён по устройству.
 export function thoughtAnchorFor(book: SnapshotBook): string {
   return `${ANCHOR_PREFIX}thought-${book.uuid.replace(/-/g, "").toLowerCase()}`;
+}
+
+/// Якорь блока отзыва о книге — `hl-verdict-<uuid книги без дефисов>`, по
+/// тому же устройству, что у мысли: приставка `hl-` видна слиянию, вставка
+/// `verdict-` не сталкивается ни с выпиской, ни с мыслью.
+export function verdictAnchorFor(book: SnapshotBook): string {
+  return `${ANCHOR_PREFIX}verdict-${book.uuid.replace(/-/g, "").toLowerCase()}`;
 }
 
 export function anchorFor(annotation: SnapshotAnnotation): string {

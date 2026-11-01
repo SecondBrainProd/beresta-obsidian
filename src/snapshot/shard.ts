@@ -84,6 +84,7 @@ const BOOK_KEYS = [
   "beresta:collections",
   "beresta:readStatus",
   "beresta:rating",
+  "beresta:verdict",
   "beresta:addedAt",
   "beresta:finishedAt",
 ];
@@ -111,6 +112,7 @@ function parseDetails(book: Record<string, JsonValue> | undefined, where: string
     collections: names("beresta:collections"),
     readStatus: text("beresta:readStatus"),
     rating: number("beresta:rating"),
+    verdict: text("beresta:verdict"),
     addedAt: text("beresta:addedAt"),
     finishedAt: text("beresta:finishedAt"),
   };
